@@ -1,0 +1,846 @@
+import { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Users, UserPlus, ClipboardCheck, CreditCard, CheckCircle2,
+  ArrowRight, ArrowLeft, ChevronRight, Upload, X, Loader2,
+  Sparkles, Trophy, Zap
+} from 'lucide-react';
+import { supabase } from '../lib/supabase';
+
+// ─── CONFIG ───────────────────────────────────────────────
+// Payment Details (Replace with real values when ready)
+const PAYMENT_INFO = {
+  upiId: 'nirmaan2k26@upi',
+  scannerName: 'NIRMAAN 2K26 - ANITS',
+  bankName: 'State Bank of India',
+  accountNo: 'XXXX XXXX XXXX 1234',
+  ifsc: 'SBIN0001234',
+};
+// ─── END CONFIG ───────────────────────────────────────────
+
+const TEAM_OPTIONS = [
+  {
+    key: 'duo' as const,
+    size: 2,
+    price: 699,
+    label: 'Duo',
+    tagline: '2 Members',
+    perHead: '₹349.50/head',
+    icon: Users,
+    color: '#3B82F6',
+  },
+  {
+    key: 'trio' as const,
+    size: 3,
+    price: 999,
+    label: 'Trio',
+    tagline: '3 Members',
+    perHead: '₹333/head',
+    icon: UserPlus,
+    color: '#F97316',
+    popular: true,
+  },
+  {
+    key: 'squad' as const,
+    size: 4,
+    price: 1249,
+    label: 'Squad',
+    tagline: '4 Members',
+    perHead: '₹312.25/head',
+    icon: Trophy,
+    color: '#8B5CF6',
+  },
+];
+
+const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
+const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+
+const STEP_META = [
+  { label: 'Team Info', icon: Users },
+  { label: 'Team Size', icon: Zap },
+  { label: 'Members', icon: UserPlus },
+  { label: 'Review', icon: ClipboardCheck },
+  { label: 'Payment', icon: CreditCard },
+];
+
+interface MemberInfo {
+  fullName: string;
+  email: string;
+  whatsapp: string;
+  gender: string;
+  college: string;
+  stream: string;
+  year: string;
+}
+
+const emptyMember = (): MemberInfo => ({
+  fullName: '',
+  email: '',
+  whatsapp: '',
+  gender: '',
+  college: '',
+  stream: '',
+  year: '',
+});
+
+export default function RegisterPage() {
+  const [step, setStep] = useState(1);
+  const [teamName, setTeamName] = useState('');
+  const [lead, setLead] = useState<MemberInfo>(emptyMember());
+  const [selectedPlan, setSelectedPlan] = useState<'duo' | 'trio' | 'squad'>('duo');
+  const [members, setMembers] = useState<MemberInfo[]>([emptyMember()]);
+  const [transactionId, setTransactionId] = useState('');
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const plan = TEAM_OPTIONS.find(o => o.key === selectedPlan)!;
+
+  // Scroll to top of form on step change
+  useEffect(() => {
+    containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [step]);
+
+  // Sync member slots with selected plan (excluding lead, so plan.size - 1 members)
+  useEffect(() => {
+    const neededMembers = plan.size - 1;
+    setMembers(prev => {
+      const next = [...prev];
+      while (next.length < neededMembers) next.push(emptyMember());
+      return next.slice(0, neededMembers);
+    });
+  }, [selectedPlan, plan.size]);
+
+  // ─── VALIDATION ─────────────────────────────────────────
+  const validateStep1 = (): string[] => {
+    const errs: string[] = [];
+    if (!teamName.trim()) errs.push('Team name is required');
+    if (!lead.fullName.trim()) errs.push('Team lead full name is required');
+    if (!/^\S+@\S+\.\S+$/.test(lead.email)) errs.push('Valid team lead email is required');
+    if (!/^\d{10}$/.test(lead.whatsapp.replace(/\D/g, ''))) errs.push('Valid 10-digit WhatsApp number is required');
+    if (!lead.gender) errs.push('Please select gender');
+    if (!lead.college.trim()) errs.push('College name is required');
+    if (!lead.stream.trim()) errs.push('Stream is required');
+    if (!lead.year) errs.push('Year is required');
+    return errs;
+  };
+
+  const validateStep3 = (): string[] => {
+    const errs: string[] = [];
+    members.forEach((m, i) => {
+      const num = i + 2;
+      if (!m.fullName.trim()) errs.push(`Member ${num}: Full name is required`);
+      if (!/^\S+@\S+\.\S+$/.test(m.email)) errs.push(`Member ${num}: Valid email is required`);
+      if (!/^\d{10}$/.test(m.whatsapp.replace(/\D/g, ''))) errs.push(`Member ${num}: Valid 10-digit WhatsApp number required`);
+      if (!m.gender) errs.push(`Member ${num}: Select gender`);
+      if (!m.college.trim()) errs.push(`Member ${num}: College name is required`);
+      if (!m.stream.trim()) errs.push(`Member ${num}: Stream is required`);
+      if (!m.year) errs.push(`Member ${num}: Year is required`);
+    });
+    return errs;
+  };
+
+  const validateStep5 = (): string[] => {
+    const errs: string[] = [];
+    if (!transactionId.trim()) errs.push('Transaction ID is required');
+    if (!screenshotFile) errs.push('Please upload a screenshot of the payment');
+    return errs;
+  };
+
+  // ─── NAVIGATION ─────────────────────────────────────────
+  const goNext = () => {
+    let errs: string[] = [];
+    if (step === 1) errs = validateStep1();
+    if (step === 3) errs = validateStep3();
+    if (step === 5) errs = validateStep5();
+    setErrors(errs);
+    if (errs.length > 0) return;
+    if (step < 5) setStep(step + 1);
+    else handleSubmit();
+  };
+
+  const goBack = () => {
+    setErrors([]);
+    if (step > 1) setStep(step - 1);
+  };
+
+  const jumpToStep = (s: number) => {
+    setErrors([]);
+    setStep(s);
+  };
+
+  // ─── FILE UPLOAD ────────────────────────────────────────
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScreenshotFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setScreenshotPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const removeScreenshot = () => {
+    setScreenshotFile(null);
+    setScreenshotPreview('');
+  };
+
+  // ─── SUBMIT TO SUPABASE ──────────────────────────────────
+  const handleSubmit = async () => {
+    const errs = validateStep5();
+    setErrors(errs);
+    if (errs.length > 0) return;
+    setSubmitting(true);
+
+    try {
+      // 1. Upload screenshot to Supabase Storage
+      let screenshotUrl = '';
+      if (screenshotFile) {
+        const fileExt = screenshotFile.name.split('.').pop();
+        const fileName = `${Date.now()}_${teamName.replace(/\s+/g, '_')}.${fileExt}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('payment-screenshots')
+          .upload(fileName, screenshotFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(`Screenshot upload failed: ${uploadError.message}`);
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('payment-screenshots')
+          .getPublicUrl(uploadData.path);
+        screenshotUrl = urlData.publicUrl;
+      }
+
+      // 2. Insert registration row
+      const { data: regData, error: regError } = await supabase
+        .from('registrations')
+        .insert({
+          team_name: teamName,
+          plan: selectedPlan,
+          team_size: plan.size,
+          price: plan.price,
+          lead_name: lead.fullName,
+          lead_email: lead.email,
+          lead_whatsapp: lead.whatsapp,
+          lead_gender: lead.gender,
+          lead_college: lead.college,
+          lead_stream: lead.stream,
+          lead_year: lead.year,
+          transaction_id: transactionId,
+          screenshot_url: screenshotUrl,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (regError) {
+        throw new Error(`Registration failed: ${regError.message}`);
+      }
+
+      // 3. Insert team member rows
+      if (members.length > 0 && regData) {
+        const memberRows = members.map(m => ({
+          registration_id: regData.id,
+          full_name: m.fullName,
+          email: m.email,
+          whatsapp: m.whatsapp,
+          gender: m.gender,
+          college: m.college,
+          stream: m.stream,
+          year: m.year,
+        }));
+
+        const { error: membersError } = await supabase
+          .from('team_members')
+          .insert(memberRows);
+
+        if (membersError) {
+          throw new Error(`Failed to save member details: ${membersError.message}`);
+        }
+      }
+
+      setSubmitting(false);
+      setSubmitted(true);
+    } catch (err: any) {
+      setSubmitting(false);
+      setErrors([err.message || 'Something went wrong. Please try again.']);
+    }
+  };
+
+  // ─── MEMBER FIELD UPDATE HELPER ─────────────────────────
+  const updateMember = (idx: number, field: keyof MemberInfo, value: string) => {
+    setMembers(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
+    });
+  };
+
+  // ─── RENDER ─────────────────────────────────────────────
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6 pt-24 pb-16">
+        <div
+          className="max-w-lg w-full p-10 rounded-3xl text-center"
+          style={{
+            background: 'rgba(8,12,24,0.9)',
+            border: '1px solid rgba(16,185,129,0.3)',
+            backdropFilter: 'blur(20px)',
+            boxShadow: '0 0 50px rgba(16,185,129,0.1)',
+            animation: 'popCenterCard 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards',
+          }}
+        >
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center"
+            style={{ background: 'rgba(16,185,129,0.15)', border: '2px solid rgba(16,185,129,0.4)' }}>
+            <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+          </div>
+          <h2 className="text-3xl font-black text-white mb-3">Registration Submitted!</h2>
+          <p className="text-slate-400 text-sm mb-2">
+            Your team <span className="text-orange-400 font-bold">{teamName}</span> has been registered for NIRMAAN 2K26.
+          </p>
+          <p className="text-slate-500 text-xs mb-8">
+            Transaction ID: <span className="text-blue-400 font-mono">{transactionId}</span>
+          </p>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 px-8 py-3.5 font-bold text-sm text-white transition-all hover:scale-105"
+            style={{
+              background: 'linear-gradient(135deg, #EA580C, #F97316)',
+              clipPath: 'polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)',
+              boxShadow: '0 0 30px rgba(249,115,22,0.35)',
+            }}
+          >
+            Back to Home <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="min-h-screen pt-24 pb-16 px-4 md:px-6 relative">
+      {/* Background glow */}
+      <div className="fixed inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse at 30% 30%, rgba(249,115,22,0.06) 0%, transparent 55%), radial-gradient(ellipse at 70% 70%, rgba(59,130,246,0.06) 0%, transparent 55%)',
+      }} />
+
+      <div className="relative z-10 max-w-3xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5"
+            style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.3)' }}>
+            <Sparkles className="w-4 h-4 text-orange-400" />
+            <span className="text-orange-400 text-xs font-mono tracking-[0.25em] uppercase">Team Registration</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-3"
+            style={{
+              background: 'linear-gradient(135deg, #FFFFFF 0%, #FB923C 50%, #FFFFFF 100%)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            }}>
+            Register for NIRMAAN 2K26
+          </h1>
+          <p className="text-slate-400 text-sm font-mono">Complete all steps to secure your spot.</p>
+        </div>
+
+        {/* ─── STEP PROGRESS BAR ─────────────────────────── */}
+        <div className="flex items-center justify-center gap-0 mb-12 px-2">
+          {STEP_META.map((s, i) => {
+            const stepNum = i + 1;
+            const isActive = step === stepNum;
+            const isComplete = step > stepNum;
+            const Icon = s.icon;
+            return (
+              <div key={stepNum} className="flex items-center">
+                <button
+                  onClick={() => { if (isComplete) jumpToStep(stepNum); }}
+                  className="flex flex-col items-center gap-1.5 transition-all duration-300 group"
+                  style={{ cursor: isComplete ? 'pointer' : 'default' }}
+                >
+                  <div
+                    className="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all duration-300"
+                    style={{
+                      background: isComplete
+                        ? 'linear-gradient(135deg, #EA580C, #F97316)'
+                        : isActive
+                          ? 'rgba(249,115,22,0.15)'
+                          : 'rgba(13,21,38,0.7)',
+                      border: isActive
+                        ? '2px solid #F97316'
+                        : isComplete
+                          ? '2px solid #F97316'
+                          : '1px solid rgba(59,130,246,0.15)',
+                      boxShadow: isActive
+                        ? '0 0 20px rgba(249,115,22,0.3)'
+                        : isComplete
+                          ? '0 0 15px rgba(249,115,22,0.2)'
+                          : 'none',
+                    }}
+                  >
+                    {isComplete ? (
+                      <CheckCircle2 className="w-5 h-5 text-white" />
+                    ) : (
+                      <Icon className="w-5 h-5" style={{ color: isActive ? '#F97316' : '#475569' }} />
+                    )}
+                  </div>
+                  <span className={`text-[10px] font-bold font-mono tracking-wide hidden md:block ${isActive ? 'text-orange-400' : isComplete ? 'text-orange-500/70' : 'text-slate-600'}`}>
+                    {s.label}
+                  </span>
+                </button>
+                {i < STEP_META.length - 1 && (
+                  <div
+                    className="w-8 md:w-16 h-0.5 mx-1 rounded-full transition-all duration-500"
+                    style={{
+                      background: step > stepNum
+                        ? 'linear-gradient(90deg, #F97316, #EA580C)'
+                        : 'rgba(59,130,246,0.12)',
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ─── FORM CARD ─────────────────────────────────── */}
+        <div
+          className="rounded-3xl p-6 md:p-10 transition-all duration-300"
+          style={{
+            background: 'rgba(8,12,24,0.85)',
+            border: '1px solid rgba(249,115,22,0.15)',
+            backdropFilter: 'blur(20px)',
+            boxShadow: '0 20px 60px -15px rgba(0,0,0,0.5)',
+          }}
+        >
+          {/* Error Messages */}
+          {errors.length > 0 && (
+            <div className="mb-6 p-4 rounded-xl" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+              {errors.map((err, i) => (
+                <p key={i} className="text-red-400 text-xs font-mono flex items-center gap-2">
+                  <span className="text-red-500">✗</span> {err}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {/* ═══════ STEP 1: Team Info & Lead Details ═══════ */}
+          {step === 1 && (
+            <div className="animate-[popCenterCard_0.35s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+              <StepHeader number={1} title="Team & Lead Information" subtitle="Enter your team name and team lead's details." />
+              <div className="space-y-5">
+                <FormField label="Team Name" value={teamName} onChange={setTeamName} placeholder="e.g. The Innovators" />
+                <div className="h-px" style={{ background: 'rgba(59,130,246,0.1)' }} />
+                <p className="text-xs text-orange-400/80 font-mono font-bold uppercase tracking-wider">Team Lead Details</p>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <FormField label="Full Name" value={lead.fullName} onChange={v => setLead({ ...lead, fullName: v })} placeholder="John Doe" />
+                  <FormField label="Email" type="email" value={lead.email} onChange={v => setLead({ ...lead, email: v })} placeholder="lead@example.com" />
+                  <FormField label="WhatsApp No." type="tel" value={lead.whatsapp} onChange={v => setLead({ ...lead, whatsapp: v })} placeholder="9876543210" />
+                  <FormSelect label="Gender" value={lead.gender} onChange={v => setLead({ ...lead, gender: v })} options={GENDER_OPTIONS} placeholder="Select gender" />
+                  <FormField label="College Name" value={lead.college} onChange={v => setLead({ ...lead, college: v })} placeholder="ANITS" />
+                  <FormField label="Stream" value={lead.stream} onChange={v => setLead({ ...lead, stream: v })} placeholder="CSE - Data Science" />
+                  <FormSelect label="Year" value={lead.year} onChange={v => setLead({ ...lead, year: v })} options={YEAR_OPTIONS} placeholder="Select year" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════ STEP 2: Team Size Selection ═══════ */}
+          {step === 2 && (
+            <div className="animate-[popCenterCard_0.35s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+              <StepHeader number={2} title="Choose Your Team Size" subtitle="Bigger team, better discount per head!" />
+              <div className="grid md:grid-cols-3 gap-4">
+                {TEAM_OPTIONS.map(opt => {
+                  const Icon = opt.icon;
+                  const isSelected = selectedPlan === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setSelectedPlan(opt.key)}
+                      className="relative p-6 rounded-2xl text-left transition-all duration-300 group"
+                      style={{
+                        background: isSelected
+                          ? 'rgba(249,115,22,0.08)'
+                          : 'rgba(13,21,38,0.6)',
+                        border: isSelected
+                          ? `2px solid ${opt.color}`
+                          : '1px solid rgba(59,130,246,0.12)',
+                        boxShadow: isSelected
+                          ? `0 0 25px ${opt.color}33`
+                          : 'none',
+                        transform: isSelected ? 'scale(1.03)' : 'scale(1)',
+                      }}
+                    >
+                      {opt.popular && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[9px] font-black font-mono uppercase tracking-wider text-white"
+                          style={{ background: 'linear-gradient(135deg, #EA580C, #F97316)' }}>
+                          Most Popular
+                        </div>
+                      )}
+                      <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-all"
+                        style={{
+                          background: `${opt.color}15`,
+                          border: `1px solid ${isSelected ? `${opt.color}55` : 'rgba(59,130,246,0.12)'}`,
+                        }}>
+                        <Icon className="w-6 h-6" style={{ color: opt.color }} />
+                      </div>
+                      <div className="text-xl font-black text-white mb-0.5">{opt.label}</div>
+                      <div className="text-xs text-slate-400 font-mono mb-3">{opt.tagline}</div>
+                      <div className="text-3xl font-black mb-1" style={{ color: opt.color }}>₹{opt.price}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">{opt.perHead}</div>
+
+                      {isSelected && (
+                        <div className="absolute top-4 right-4">
+                          <CheckCircle2 className="w-6 h-6" style={{ color: opt.color }} />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-6 text-center">
+                <p className="text-xs text-slate-500 font-mono">
+                  💡 Includes: Free Meals, Swag Kit, Mentorship, Certificates, Campfire & Movie Night
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════ STEP 3: Team Member Details ═══════ */}
+          {step === 3 && (
+            <div className="animate-[popCenterCard_0.35s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+              <StepHeader
+                number={3}
+                title="Team Member Details"
+                subtitle={`Enter details for your ${members.length} additional team member${members.length > 1 ? 's' : ''}.`}
+              />
+              <div className="space-y-6">
+                {members.map((m, idx) => (
+                  <div key={idx} className="p-5 rounded-2xl space-y-4"
+                    style={{ background: 'rgba(13,21,38,0.5)', border: '1px solid rgba(59,130,246,0.1)' }}>
+                    <p className="text-xs text-blue-400 font-mono font-bold uppercase tracking-wider">
+                      Member {idx + 2}
+                    </p>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <FormField label="Full Name" value={m.fullName} onChange={v => updateMember(idx, 'fullName', v)} placeholder="Jane Doe" />
+                      <FormField label="Email" type="email" value={m.email} onChange={v => updateMember(idx, 'email', v)} placeholder="member@example.com" />
+                      <FormField label="WhatsApp No." type="tel" value={m.whatsapp} onChange={v => updateMember(idx, 'whatsapp', v)} placeholder="9876543210" />
+                      <FormSelect label="Gender" value={m.gender} onChange={v => updateMember(idx, 'gender', v)} options={GENDER_OPTIONS} placeholder="Select gender" />
+                      <FormField label="College Name" value={m.college} onChange={v => updateMember(idx, 'college', v)} placeholder="ANITS" />
+                      <FormField label="Stream" value={m.stream} onChange={v => updateMember(idx, 'stream', v)} placeholder="CSE - Data Science" />
+                      <FormSelect label="Year" value={m.year} onChange={v => updateMember(idx, 'year', v)} options={YEAR_OPTIONS} placeholder="Select year" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ═══════ STEP 4: Review ═══════ */}
+          {step === 4 && (
+            <div className="animate-[popCenterCard_0.35s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+              <StepHeader number={4} title="Review Your Registration" subtitle="Please verify all details before proceeding to payment." />
+
+              {/* Team Info Review */}
+              <ReviewSection title="Team Info" onEdit={() => jumpToStep(1)}>
+                <ReviewRow label="Team Name" value={teamName} />
+              </ReviewSection>
+
+              {/* Lead Info Review */}
+              <ReviewSection title="Team Lead" onEdit={() => jumpToStep(1)}>
+                <ReviewRow label="Full Name" value={lead.fullName} />
+                <ReviewRow label="Email" value={lead.email} />
+                <ReviewRow label="WhatsApp" value={lead.whatsapp} />
+                <ReviewRow label="Gender" value={lead.gender} />
+                <ReviewRow label="College" value={lead.college} />
+                <ReviewRow label="Stream" value={lead.stream} />
+                <ReviewRow label="Year" value={lead.year} />
+              </ReviewSection>
+
+              {/* Plan Review */}
+              <ReviewSection title="Selected Plan" onEdit={() => jumpToStep(2)}>
+                <ReviewRow label="Plan" value={`${plan.label} (${plan.tagline})`} />
+                <ReviewRow label="Price" value={`₹${plan.price}`} highlight />
+              </ReviewSection>
+
+              {/* Member Reviews */}
+              {members.map((m, idx) => (
+                <ReviewSection key={idx} title={`Member ${idx + 2}`} onEdit={() => jumpToStep(3)}>
+                  <ReviewRow label="Full Name" value={m.fullName} />
+                  <ReviewRow label="Email" value={m.email} />
+                  <ReviewRow label="WhatsApp" value={m.whatsapp} />
+                  <ReviewRow label="Gender" value={m.gender} />
+                  <ReviewRow label="College" value={m.college} />
+                  <ReviewRow label="Stream" value={m.stream} />
+                  <ReviewRow label="Year" value={m.year} />
+                </ReviewSection>
+              ))}
+
+              {/* Price Summary */}
+              <div className="mt-6 p-5 rounded-2xl" style={{
+                background: 'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(59,130,246,0.06) 100%)',
+                border: '1px solid rgba(249,115,22,0.2)',
+              }}>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-300">Total Amount</span>
+                  <span className="text-3xl font-black text-orange-400">₹{plan.price}</span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-mono mt-1">
+                  Inclusive of meals, swag kit, mentorship, certificates, campfire & movie night
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════ STEP 5: Payment ═══════ */}
+          {step === 5 && (
+            <div className="animate-[popCenterCard_0.35s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+              <StepHeader number={5} title="Payment" subtitle={`Pay ₹${plan.price} and upload the transaction proof.`} />
+
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
+                {/* Payment Info */}
+                <div className="p-5 rounded-2xl space-y-3" style={{ background: 'rgba(13,21,38,0.6)', border: '1px solid rgba(59,130,246,0.12)' }}>
+                  <p className="text-xs font-mono font-bold text-orange-400 uppercase tracking-wider mb-3">Payment Details</p>
+                  <PaymentRow label="UPI ID" value={PAYMENT_INFO.upiId} mono />
+                  <PaymentRow label="Name" value={PAYMENT_INFO.scannerName} />
+                  <PaymentRow label="Bank" value={PAYMENT_INFO.bankName} />
+                  <PaymentRow label="Account No." value={PAYMENT_INFO.accountNo} mono />
+                  <PaymentRow label="IFSC" value={PAYMENT_INFO.ifsc} mono />
+                  <div className="pt-3">
+                    <div className="text-2xl font-black text-orange-400 text-center">₹{plan.price}</div>
+                    <p className="text-[10px] text-slate-500 font-mono text-center mt-0.5">Amount to pay</p>
+                  </div>
+                </div>
+
+                {/* QR Code Placeholder */}
+                <div className="p-5 rounded-2xl flex flex-col items-center justify-center" style={{ background: 'rgba(13,21,38,0.6)', border: '1px solid rgba(59,130,246,0.12)' }}>
+                  <p className="text-xs font-mono font-bold text-blue-400 uppercase tracking-wider mb-4">Scan & Pay</p>
+                  <div className="w-48 h-48 rounded-2xl flex items-center justify-center mb-3"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '2px dashed rgba(249,115,22,0.3)' }}>
+                    <div className="text-center">
+                      <CreditCard className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                      <p className="text-[10px] text-slate-500 font-mono">QR Code</p>
+                      <p className="text-[9px] text-slate-600 font-mono">Will be placed here</p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-mono">UPI: {PAYMENT_INFO.upiId}</p>
+                </div>
+              </div>
+
+              {/* Transaction Details */}
+              <div className="space-y-4">
+                <FormField
+                  label="Transaction ID / UTR Number"
+                  value={transactionId}
+                  onChange={setTransactionId}
+                  placeholder="Enter your transaction ID"
+                />
+
+                {/* Screenshot Upload */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 mb-2 font-mono uppercase tracking-wider">
+                    Upload Payment Screenshot
+                  </label>
+                  {!screenshotPreview ? (
+                    <label
+                      className="flex flex-col items-center justify-center gap-3 p-8 rounded-2xl cursor-pointer transition-all hover:border-orange-400/40 group"
+                      style={{
+                        background: 'rgba(13,21,38,0.5)',
+                        border: '2px dashed rgba(59,130,246,0.2)',
+                      }}
+                    >
+                      <Upload className="w-8 h-8 text-slate-600 group-hover:text-orange-400 transition-colors" />
+                      <p className="text-xs text-slate-500 font-mono group-hover:text-slate-400 transition-colors">
+                        Click to upload or drag & drop
+                      </p>
+                      <p className="text-[10px] text-slate-600 font-mono">PNG, JPG, JPEG (Max 5MB)</p>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  ) : (
+                    <div className="relative p-4 rounded-2xl" style={{ background: 'rgba(13,21,38,0.5)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                      <button
+                        type="button"
+                        onClick={removeScreenshot}
+                        className="absolute top-3 right-3 p-1.5 rounded-lg transition-colors"
+                        style={{ background: 'rgba(239,68,68,0.15)' }}
+                      >
+                        <X className="w-4 h-4 text-red-400" />
+                      </button>
+                      <img
+                        src={screenshotPreview}
+                        alt="Payment screenshot"
+                        className="w-full max-h-60 object-contain rounded-xl"
+                      />
+                      <p className="text-[10px] text-emerald-400 font-mono mt-2 text-center">
+                        ✓ {screenshotFile?.name}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── NAVIGATION BUTTONS ──────────────────────── */}
+          <div className="flex items-center justify-between mt-10 pt-6" style={{ borderTop: '1px solid rgba(59,130,246,0.1)' }}>
+            {step > 1 ? (
+              <button
+                type="button"
+                onClick={goBack}
+                className="flex items-center gap-2 px-6 py-3 text-sm font-bold text-slate-400 hover:text-white rounded-xl transition-all hover:bg-white/5"
+                style={{ border: '1px solid rgba(59,130,246,0.15)' }}
+              >
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={submitting}
+              className="flex items-center gap-2 px-8 py-3.5 text-sm font-bold text-white transition-all hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{
+                background: 'linear-gradient(135deg, #EA580C, #F97316)',
+                clipPath: 'polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)',
+                boxShadow: '0 0 25px rgba(249,115,22,0.3)',
+              }}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
+                </>
+              ) : step === 5 ? (
+                <>
+                  Submit Registration <CheckCircle2 className="w-4 h-4" />
+                </>
+              ) : step === 4 ? (
+                <>
+                  Proceed to Payment <CreditCard className="w-4 h-4" />
+                </>
+              ) : (
+                <>
+                  Continue <ChevronRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SUB-COMPONENTS ─────────────────────────────────────────
+
+function StepHeader({ number, title, subtitle }: { number: number; title: string; subtitle: string }) {
+  return (
+    <div className="mb-8">
+      <span className="text-xs font-mono font-bold text-orange-500/60 uppercase tracking-widest">Step {number} of 5</span>
+      <h2 className="text-xl md:text-2xl font-black text-white mt-1 mb-1">{title}</h2>
+      <p className="text-xs text-slate-500 font-mono">{subtitle}</p>
+    </div>
+  );
+}
+
+function FormField({
+  label, value, onChange, placeholder, type = 'text',
+}: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-400 mb-1.5 font-mono uppercase tracking-wider">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-4 py-3 rounded-xl text-sm font-medium text-white placeholder:text-slate-600 focus:outline-none transition-all"
+        style={{
+          background: 'rgba(13,21,38,0.7)',
+          border: '1px solid rgba(59,130,246,0.15)',
+        }}
+        onFocus={e => { e.target.style.borderColor = 'rgba(249,115,22,0.4)'; e.target.style.boxShadow = '0 0 15px rgba(249,115,22,0.1)'; }}
+        onBlur={e => { e.target.style.borderColor = 'rgba(59,130,246,0.15)'; e.target.style.boxShadow = 'none'; }}
+      />
+    </div>
+  );
+}
+
+function FormSelect({
+  label, value, onChange, options, placeholder,
+}: {
+  label: string; value: string; onChange: (v: string) => void; options: string[]; placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-400 mb-1.5 font-mono uppercase tracking-wider">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-4 py-3 rounded-xl text-sm font-medium text-white focus:outline-none transition-all appearance-none"
+        style={{
+          background: 'rgba(13,21,38,0.7)',
+          border: '1px solid rgba(59,130,246,0.15)',
+        }}
+        onFocus={e => { e.target.style.borderColor = 'rgba(249,115,22,0.4)'; e.target.style.boxShadow = '0 0 15px rgba(249,115,22,0.1)'; }}
+        onBlur={e => { e.target.style.borderColor = 'rgba(59,130,246,0.15)'; e.target.style.boxShadow = 'none'; }}
+      >
+        {placeholder && <option value="" className="bg-slate-900">{placeholder}</option>}
+        {options.map(opt => (
+          <option key={opt} value={opt} className="bg-slate-900">{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ReviewSection({ title, onEdit, children }: { title: string; onEdit: () => void; children: React.ReactNode }) {
+  return (
+    <div className="mb-4 p-4 rounded-2xl" style={{ background: 'rgba(13,21,38,0.5)', border: '1px solid rgba(59,130,246,0.1)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-mono font-bold text-blue-400 uppercase tracking-wider">{title}</span>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-[10px] font-bold font-mono text-orange-400 hover:text-orange-300 uppercase tracking-wider transition-colors"
+        >
+          Edit →
+        </button>
+      </div>
+      <div className="space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function ReviewRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="flex justify-between items-center py-1">
+      <span className="text-xs text-slate-500 font-mono">{label}</span>
+      <span className={`text-xs font-bold font-mono ${highlight ? 'text-orange-400 text-base' : 'text-slate-200'}`}>{value}</span>
+    </div>
+  );
+}
+
+function PaymentRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex justify-between items-center py-1.5" style={{ borderBottom: '1px solid rgba(59,130,246,0.06)' }}>
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className={`text-xs font-bold text-slate-200 ${mono ? 'font-mono' : ''}`}>{value}</span>
+    </div>
+  );
+}
