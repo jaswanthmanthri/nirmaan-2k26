@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { 
   Download, Sparkles, Award, Tv, 
   Eye, Mail, Phone, 
-  MapPin, Github, Twitter, Linkedin, Flame, CheckCircle2, LifeBuoy,
+  MapPin, Flame, CheckCircle2, LifeBuoy,
   Navigation, ExternalLink
 } from 'lucide-react';
 
@@ -301,7 +301,7 @@ export default function Sponsors() {
                 <div className="text-sm text-slate-400 mt-1">Anil Neerukonda Institute of Technology & Sciences</div>
               </div>
               <div className="flex gap-3">
-                {[Github, Twitter, Linkedin].map((Icon, i) => (
+                {[Mail, Phone, ExternalLink].map((Icon, i) => (
                   <div
                     key={i}
                     className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-blue-400/60 cursor-pointer transition-all hover:scale-110"
