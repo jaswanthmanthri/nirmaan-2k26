@@ -3,9 +3,11 @@ import { Link, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
   { label: 'Home', href: '#hero' },
+  { label: 'About', href: '#about' },
   { label: 'Timeline', href: '#timeline' },
   { label: 'Structure', href: '#structure' },
   { label: 'Domains', href: '#domains' },
+  { label: 'Our Team', href: '#team' },
   { label: 'Sponsor Us', href: '#sponsors' },
   { label: 'Help & Contact', href: '#contact' },
   { label: 'Location', href: '#location' },
@@ -51,13 +53,13 @@ export default function Navbar() {
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-1">
+        <div className="hidden lg:flex items-center gap-1 xl:gap-2">
           {!isWorkflowPage && NAV_ITEMS.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-orange-400 rounded-lg transition-all duration-200 font-mono hover:bg-orange-500/5"
-              style={{ letterSpacing: '0.05em' }}
+              className="px-2.5 xl:px-3 py-1.5 text-xs xl:text-sm font-semibold text-slate-300 hover:text-orange-400 rounded-lg transition-all duration-200 font-mono hover:bg-orange-500/10 whitespace-nowrap shrink-0"
+              style={{ letterSpacing: '0.03em' }}
             >
               {item.label}
             </a>
@@ -65,15 +67,15 @@ export default function Navbar() {
           {isWorkflowPage && (
             <Link
               to="/"
-              className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-orange-400 rounded-lg transition-all duration-200 font-mono hover:bg-orange-500/5"
-              style={{ letterSpacing: '0.05em' }}
+              className="px-3 py-1.5 text-xs xl:text-sm font-semibold text-slate-300 hover:text-orange-400 rounded-lg transition-all duration-200 font-mono hover:bg-orange-500/10 whitespace-nowrap"
+              style={{ letterSpacing: '0.03em' }}
             >
               ← Back to Home
             </Link>
           )}
           <Link
             to="/register"
-            className="ml-2 px-5 py-2 text-sm font-bold text-white rounded-none transition-all hover:scale-105"
+            className="ml-2 px-4 xl:px-5 py-2 text-xs xl:text-sm font-bold text-white rounded-none transition-all hover:scale-105 whitespace-nowrap shrink-0"
             style={{
               background: 'linear-gradient(135deg, #EA580C, #F97316)',
               clipPath: 'polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%)',
@@ -84,9 +86,9 @@ export default function Navbar() {
           </Link>
         </div>
 
-        {/* Mobile hamburger */}
+        {/* Mobile hamburger - show on md & below */}
         <button
-          className="md:hidden p-2 rounded-lg transition-colors"
+          className="lg:hidden p-2 rounded-lg transition-colors"
           style={{ color: '#FB923C' }}
           onClick={() => setOpen(!open)}
           aria-label="Menu"
@@ -102,7 +104,7 @@ export default function Navbar() {
       {/* Mobile menu */}
       {open && (
         <div
-          className="md:hidden px-6 py-4 flex flex-col gap-1"
+          className="lg:hidden px-6 py-4 flex flex-col gap-1"
           style={{
             background: 'rgba(2,8,23,0.95)',
             backdropFilter: 'blur(16px)',

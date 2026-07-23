@@ -8,6 +8,7 @@ import AboutSection from './components/AboutSection';
 import Timeline from './components/Timeline';
 import Structure from './components/Structure';
 import Domains from './components/Domains';
+import Team from './components/Team';
 import Sponsors from './components/Sponsors';
 import RegisterPage from './components/RegisterPage';
 import AdminPage from './components/AdminPage';
@@ -23,6 +24,7 @@ function HomePage() {
       <Timeline />
       <Structure />
       <Domains />
+      <Team />
       <Sponsors />
     </>
   );

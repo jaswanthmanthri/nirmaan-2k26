@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { Laptop } from 'lucide-react';
 
 /*
  * N-Letter target grid (22 blocks)
@@ -447,6 +448,18 @@ export default function IntroScene({ onComplete }: { onComplete: () => void }) {
             </div>
           </div>
         )}
+        {/* Laptop/Desktop view recommendation badge */}
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 pointer-events-none z-20 flex items-center gap-2 px-4 py-1.5 rounded-full shadow-lg"
+          style={{
+            background: 'rgba(15,23,42,0.85)',
+            border: '1px solid rgba(59,130,246,0.35)',
+            backdropFilter: 'blur(10px)',
+          }}>
+          <Laptop className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+          <span className="text-[11px] font-mono text-slate-300 tracking-wider">
+            Best experienced on Laptop / Desktop
+          </span>
+        </div>
       </div>
 
       {/* Flash */}
