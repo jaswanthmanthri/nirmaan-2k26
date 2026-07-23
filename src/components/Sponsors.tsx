@@ -23,6 +23,7 @@ export default function Sponsors() {
   const { ref: impactRef, visible: impactVisible } = useInView(0.1);
   const { ref: contactRef, visible: contactVisible } = useInView(0.1);
   const { ref: locationRef, visible: locationVisible } = useInView(0.1);
+  const [showBrochure, setShowBrochure] = useState(false);
 
   const brochureUrl = "/NIRMAAN 2K26 BROCHURE - ANITS CSE (Data Science).pdf";
   const gmapsUrl = "https://www.google.com/maps/search/?api=1&query=Anil+Neerukonda+Institute+of+Technology+and+Sciences+Sangivalasa+Visakhapatnam";
@@ -91,24 +92,83 @@ export default function Sponsors() {
             </div>
           </div>
 
-          {/* Download Brochure CTA Button */}
+          {/* Brochure Preview CTA Button */}
           <div className="mt-8 flex justify-center">
-            <a
-              href={brochureUrl}
-              download="NIRMAAN_2K26_BROCHURE.pdf"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => setShowBrochure(true)}
               className="inline-flex items-center gap-3 px-8 py-4 rounded-xl font-mono text-xs md:text-sm font-bold tracking-wider uppercase text-white shadow-2xl transition-all duration-300 hover:scale-105 hover:shadow-[0_0_35px_rgba(249,115,22,0.4)]"
               style={{
                 background: 'linear-gradient(135deg, #EA580C 0%, #F97316 50%, #FB923C 100%)',
                 clipPath: 'polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%)',
               }}
             >
-              <Download className="w-5 h-5 animate-bounce" />
-              <span>Download Official Sponsorship Brochure (PDF)</span>
-            </a>
+              <Eye className="w-5 h-5" />
+              <span>Preview Sponsorship Brochure</span>
+            </button>
           </div>
         </div>
+
+        {/* ── Brochure Preview Modal ── */}
+        {showBrochure && (
+          <div
+            className="fixed inset-0 z-[999] flex items-center justify-center p-4"
+            style={{ background: 'rgba(2,8,23,0.92)', backdropFilter: 'blur(20px)' }}
+            onClick={() => setShowBrochure(false)}
+          >
+            <div
+              className="relative w-full max-w-4xl h-[90vh] rounded-2xl overflow-hidden flex flex-col"
+              style={{
+                background: 'rgba(13,21,38,0.98)',
+                border: '1px solid rgba(249,115,22,0.4)',
+                boxShadow: '0 0 60px rgba(249,115,22,0.2)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div
+                className="flex items-center justify-between px-6 py-4 border-b"
+                style={{ borderColor: 'rgba(249,115,22,0.2)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(249,115,22,0.15)' }}>
+                    <Eye className="w-4 h-4 text-orange-400" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-white font-mono tracking-wide">NIRMAAN 2K26 — Official Brochure</div>
+                    <div className="text-xs text-slate-400 font-mono">Sponsorship Package & Event Details</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={brochureUrl}
+                    download="NIRMAAN_2K26_BROCHURE.pdf"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase tracking-wider text-black transition-all hover:scale-105"
+                    style={{ background: 'linear-gradient(135deg, #F97316, #FB923C)' }}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download PDF
+                  </a>
+                  <button
+                    onClick={() => setShowBrochure(false)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all font-mono text-lg leading-none"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* PDF Embed */}
+              <div className="flex-1 w-full">
+                <iframe
+                  src={`${brochureUrl}#toolbar=0&navpanes=0`}
+                  className="w-full h-full"
+                  style={{ border: 'none' }}
+                  title="NIRMAAN 2K26 Sponsorship Brochure"
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
 
         {/* ── Benefits of Sponsoring Us ── */}

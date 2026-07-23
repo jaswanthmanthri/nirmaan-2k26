@@ -23,18 +23,27 @@ export default function Hero() {
       {/* Main content */}
       <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
 
-        {/* Institution & Department Header (No button style) */}
-        <div className="mb-6 animate-[fadeUp_0.8s_ease] space-y-1.5">
-          <h3 className="text-sm md:text-base font-bold text-slate-200 tracking-wider uppercase font-mono">
+        {/* Institution & Department Header */}
+        <div className="mb-8 animate-[fadeUp_0.8s_ease] space-y-2">
+          <h3
+            className="text-base md:text-xl text-slate-100 leading-snug"
+            style={{ fontFamily: "'Playfair Display', serif", fontWeight: 800, letterSpacing: '0.01em' }}
+          >
             Anil Neerukonda Institute of Technology and Sciences
           </h3>
-          <p className="text-xs md:text-sm font-semibold text-orange-400 tracking-widest uppercase font-mono">
+          <p
+            className="text-xs md:text-sm text-orange-400"
+            style={{ fontFamily: "'Raleway', sans-serif", fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase' }}
+          >
             Department of CSE (Data Science)
           </p>
           <div className="pt-2 flex items-center justify-center gap-3">
-            <div className="h-px w-10 bg-gradient-to-r from-transparent to-orange-500/50" />
-            <span className="text-[11px] font-mono tracking-[0.4em] text-slate-400 uppercase font-bold">- presents -</span>
-            <div className="h-px w-10 bg-gradient-to-l from-transparent to-orange-500/50" />
+            <div className="h-px w-12 bg-gradient-to-r from-transparent to-orange-500/50" />
+            <span
+              className="text-slate-400"
+              style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontSize: '0.8rem', letterSpacing: '0.05em' }}
+            >— presents —</span>
+            <div className="h-px w-12 bg-gradient-to-l from-transparent to-orange-500/50" />
           </div>
         </div>
 
@@ -84,7 +93,10 @@ export default function Hero() {
                 backdropFilter: 'blur(8px)',
               }}>
               <Icon className={`w-4 h-4 ${color}`} />
-              <span className="text-sm font-semibold text-slate-200 font-mono">{text}</span>
+              <span
+                className="text-slate-200"
+                style={{ fontFamily: "'Raleway', sans-serif", fontWeight: 600, fontSize: '0.875rem', letterSpacing: '0.04em' }}
+              >{text}</span>
             </div>
           ))}
         </div>
@@ -105,8 +117,10 @@ export default function Hero() {
               '🔥 Campfire',
               '🎉 Fun Activities & A Lot More'
             ].map((item, index) => (
-              <span key={index} className="text-xs md:text-sm font-mono font-bold text-orange-300 flex items-center gap-3">
-                {index > 0 && <span className="text-slate-600 font-normal">·</span>}
+              <span key={index} className="text-orange-300 flex items-center gap-3"
+                style={{ fontFamily: "'Raleway', sans-serif", fontWeight: 700, fontSize: '0.82rem', letterSpacing: '0.03em' }}
+              >
+                {index > 0 && <span className="text-slate-600" style={{ fontWeight: 400 }}>·</span>}
                 {item}
               </span>
             ))}

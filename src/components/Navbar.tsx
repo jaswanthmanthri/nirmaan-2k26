@@ -25,8 +25,9 @@ export default function Navbar() {
 
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-40 transition-all duration-500"
+      className="fixed left-0 right-0 z-40 transition-all duration-500"
       style={{
+        top: 28,
         background: scrolled || isWorkflowPage ? 'rgba(2,8,23,0.85)' : 'transparent',
         backdropFilter: scrolled || isWorkflowPage ? 'blur(16px)' : 'none',
         boxShadow: scrolled || isWorkflowPage ? '0 0 30px rgba(249,115,22,0.08)' : 'none',
@@ -67,7 +68,7 @@ export default function Navbar() {
               className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-orange-400 rounded-lg transition-all duration-200 font-mono hover:bg-orange-500/5"
               style={{ letterSpacing: '0.05em' }}
             >
-              Back to Home
+              ← Back to Home
             </Link>
           )}
           <Link
@@ -125,7 +126,7 @@ export default function Navbar() {
             className="px-4 py-3 text-sm font-bold text-orange-400 hover:text-orange-300 rounded-lg font-mono transition-colors"
             style={{ letterSpacing: '0.05em' }}
           >
-            Register Now
+            Register Now →
           </Link>
         </div>
       )}
