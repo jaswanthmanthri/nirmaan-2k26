@@ -1,4 +1,4 @@
-import { Calendar, MapPin, Clock, ArrowRight, Sparkles } from 'lucide-react';
+import { Calendar, MapPin, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Hero() {
@@ -23,18 +23,19 @@ export default function Hero() {
       {/* Main content */}
       <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
 
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 animate-[fadeUp_0.8s_ease]"
-          style={{
-            background: 'rgba(13,21,38,0.8)',
-            border: '1px solid rgba(249,115,22,0.3)',
-            boxShadow: '0 0 20px rgba(249,115,22,0.1)',
-            backdropFilter: 'blur(12px)',
-          }}>
-          <Sparkles className="w-4 h-4 text-orange-400" />
-          <span className="text-xs font-semibold text-orange-300 tracking-wider uppercase font-mono">
-            ANITS Presents · National Level Hackathon
-          </span>
+        {/* Institution & Department Header (No button style) */}
+        <div className="mb-6 animate-[fadeUp_0.8s_ease] space-y-1.5">
+          <h3 className="text-sm md:text-base font-bold text-slate-200 tracking-wider uppercase font-mono">
+            Anil Neerukonda Institute of Technology and Sciences
+          </h3>
+          <p className="text-xs md:text-sm font-semibold text-orange-400 tracking-widest uppercase font-mono">
+            Department of CSE (Data Science)
+          </p>
+          <div className="pt-2 flex items-center justify-center gap-3">
+            <div className="h-px w-10 bg-gradient-to-r from-transparent to-orange-500/50" />
+            <span className="text-[11px] font-mono tracking-[0.4em] text-slate-400 uppercase font-bold">- presents -</span>
+            <div className="h-px w-10 bg-gradient-to-l from-transparent to-orange-500/50" />
+          </div>
         </div>
 
         {/* Main title */}
@@ -66,21 +67,20 @@ export default function Hero() {
         <p className="text-sm md:text-base font-bold text-orange-300/80 mb-2 tracking-[0.25em] uppercase font-mono animate-[fadeUp_1.2s_ease]">
           ACCELERATING. NEW. IDEAS. THROUGH. SMART. SOLUTIONS.
         </p>
-        <p className="text-sm md:text-base text-slate-400 max-w-2xl mx-auto mb-10 animate-[fadeUp_1.4s_ease]">
-          A 24-hour national-level hackathon where builders, dreamers, and innovators converge.
+        <p className="text-sm md:text-base text-slate-400 max-w-2xl mx-auto mb-8 animate-[fadeUp_1.4s_ease]">
+          A national-level hackathon where builders, dreamers, and innovators converge to create real-world impact.
         </p>
 
-        {/* Info chips */}
-        <div className="flex flex-wrap items-center justify-center gap-4 mb-12 animate-[fadeUp_1.6s_ease]">
+        {/* Info chips (Date & Location) */}
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-6 animate-[fadeUp_1.5s_ease]">
           {[
             { icon: Calendar, text: '11–12 September 2026', color: 'text-blue-400' },
             { icon: MapPin, text: 'ANITS, Visakhapatnam', color: 'text-orange-400' },
-            { icon: Clock, text: '24 Hours Non-Stop', color: 'text-blue-400' },
           ].map(({ icon: Icon, text, color }) => (
-            <div key={text} className="flex items-center gap-2 px-4 py-2.5 rounded-lg"
+            <div key={text} className="flex items-center gap-2 px-5 py-2.5 rounded-xl"
               style={{
-                background: 'rgba(13,21,38,0.7)',
-                border: '1px solid rgba(59,130,246,0.2)',
+                background: 'rgba(13,21,38,0.75)',
+                border: '1px solid rgba(59,130,246,0.25)',
                 backdropFilter: 'blur(8px)',
               }}>
               <Icon className={`w-4 h-4 ${color}`} />
@@ -89,8 +89,32 @@ export default function Hero() {
           ))}
         </div>
 
+        {/* Fun Event Experiences & Activities */}
+        <div className="mb-10 animate-[fadeUp_1.7s_ease] flex items-center justify-center">
+          <div className="inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3 rounded-2xl"
+            style={{
+              background: 'rgba(13,21,38,0.8)',
+              border: '1px solid rgba(249,115,22,0.3)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 0 25px rgba(249,115,22,0.1)',
+            }}
+          >
+            {[
+              '🍿 Food & Refreshments',
+              '🎬 Movie Screening',
+              '🔥 Campfire',
+              '🎉 Fun Activities & A Lot More'
+            ].map((item, index) => (
+              <span key={index} className="text-xs md:text-sm font-mono font-bold text-orange-300 flex items-center gap-3">
+                {index > 0 && <span className="text-slate-600 font-normal">·</span>}
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+
         {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-[fadeUp_1.8s_ease]">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-[fadeUp_1.9s_ease]">
           <a
             href="#domains"
             className="group px-8 py-4 font-bold text-sm tracking-wide transition-all hover:scale-105 flex items-center gap-2"

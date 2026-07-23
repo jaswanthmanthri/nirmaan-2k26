@@ -1,0 +1,7 @@
+project_id = "nirmaan-2k26"
+
+[functions.submit-registration]
+verify_jwt = false
+
+[functions.admin-registrations]
+verify_jwt = false

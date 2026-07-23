@@ -6,14 +6,16 @@ const NAV_ITEMS = [
   { label: 'Timeline', href: '#timeline' },
   { label: 'Structure', href: '#structure' },
   { label: 'Domains', href: '#domains' },
-  { label: 'Sponsors', href: '#sponsors' },
+  { label: 'Sponsor Us', href: '#sponsors' },
+  { label: 'Help & Contact', href: '#contact' },
+  { label: 'Location', href: '#location' },
 ];
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const location = useLocation();
-  const isRegisterPage = location.pathname === '/register';
+  const isWorkflowPage = ['/register', '/admin'].includes(location.pathname);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -25,10 +27,10 @@ export default function Navbar() {
     <nav
       className="fixed top-0 left-0 right-0 z-40 transition-all duration-500"
       style={{
-        background: scrolled || isRegisterPage ? 'rgba(2,8,23,0.85)' : 'transparent',
-        backdropFilter: scrolled || isRegisterPage ? 'blur(16px)' : 'none',
-        boxShadow: scrolled || isRegisterPage ? '0 0 30px rgba(249,115,22,0.08)' : 'none',
-        borderBottom: scrolled || isRegisterPage ? '1px solid rgba(249,115,22,0.15)' : '1px solid transparent',
+        background: scrolled || isWorkflowPage ? 'rgba(2,8,23,0.85)' : 'transparent',
+        backdropFilter: scrolled || isWorkflowPage ? 'blur(16px)' : 'none',
+        boxShadow: scrolled || isWorkflowPage ? '0 0 30px rgba(249,115,22,0.08)' : 'none',
+        borderBottom: scrolled || isWorkflowPage ? '1px solid rgba(249,115,22,0.15)' : '1px solid transparent',
       }}
     >
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -49,7 +51,7 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-1">
-          {!isRegisterPage && NAV_ITEMS.map((item) => (
+          {!isWorkflowPage && NAV_ITEMS.map((item) => (
             <a
               key={item.href}
               href={item.href}
@@ -59,13 +61,13 @@ export default function Navbar() {
               {item.label}
             </a>
           ))}
-          {isRegisterPage && (
+          {isWorkflowPage && (
             <Link
               to="/"
               className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-orange-400 rounded-lg transition-all duration-200 font-mono hover:bg-orange-500/5"
               style={{ letterSpacing: '0.05em' }}
             >
-              ← Back to Home
+              Back to Home
             </Link>
           )}
           <Link
@@ -106,7 +108,7 @@ export default function Navbar() {
             borderTop: '1px solid rgba(249,115,22,0.15)',
           }}
         >
-          {!isRegisterPage && NAV_ITEMS.map((item) => (
+          {!isWorkflowPage && NAV_ITEMS.map((item) => (
             <a
               key={item.href}
               href={item.href}
@@ -123,7 +125,7 @@ export default function Navbar() {
             className="px-4 py-3 text-sm font-bold text-orange-400 hover:text-orange-300 rounded-lg font-mono transition-colors"
             style={{ letterSpacing: '0.05em' }}
           >
-            Register Now →
+            Register Now
           </Link>
         </div>
       )}

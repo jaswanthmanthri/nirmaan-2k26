@@ -8,6 +8,7 @@ import Structure from './components/Structure';
 import Domains from './components/Domains';
 import Sponsors from './components/Sponsors';
 import RegisterPage from './components/RegisterPage';
+import AdminPage from './components/AdminPage';
 
 function HomePage() {
   return (
@@ -26,8 +27,8 @@ export default function App() {
   const [isRegisterRoute, setIsRegisterRoute] = useState(false);
 
   useEffect(() => {
-    // Skip intro on /register route
-    setIsRegisterRoute(window.location.pathname === '/register');
+    // Skip intro on direct workflow routes
+    setIsRegisterRoute(['/register', '/admin'].includes(window.location.pathname));
   }, []);
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function App() {
     }
   }, [introDone]);
 
-  // Skip intro animation for register route
+  // Skip intro animation for direct workflow routes
   if (!introDone && !isRegisterRoute) {
     return <IntroScene onComplete={() => setIntroDone(true)} />;
   }
@@ -48,6 +49,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>
     </div>

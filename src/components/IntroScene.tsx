@@ -2,8 +2,70 @@ import { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
-const BLOCK_COUNT = 22;
+/*
+ * N-Letter target grid (22 blocks)
+ * The "N" is built from three strokes on a 5-column × 7-row grid:
+ *   Left pillar  : col 0, rows 0-6  (7 blocks)
+ *   Diagonal      : (1,5) (1,4) (2,3) (2,4) (3,2) (3,1) (4,1) (4,0)  (8 blocks)
+ *   Right pillar  : col 4, rows 0-6  (7 blocks)
+ * Grid cell size = 0.42 units, centered at origin.
+ */
+const CELL = 0.42;
+const COLS = 5;
+const ROWS = 7;
+const OFFSET_X = ((COLS - 1) * CELL) / 2;
+const OFFSET_Y = ((ROWS - 1) * CELL) / 2;
 
+function gridPos(col: number, row: number): [number, number, number] {
+  return [col * CELL - OFFSET_X, (ROWS - 1 - row) * CELL - OFFSET_Y, 0];
+}
+
+// Define the N shape positions
+const N_POSITIONS: [number, number][] = [
+  // Left pillar (col 0, top to bottom)
+  [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6],
+  // Diagonal (top-left to bottom-right)
+  [1, 1], [1, 2], [2, 2], [2, 3], [3, 3], [3, 4], [4, 4], [4, 5],
+  // Right pillar (col 4, top to bottom)
+  [4, 0], [4, 1], [4, 2], [4, 3], [4, 4], [4, 5], [4, 6],
+];
+
+// Deduplicate positions (diagonal may overlap with pillars)
+const seen = new Set<string>();
+const UNIQUE_N: [number, number][] = [];
+for (const p of N_POSITIONS) {
+  const key = `${p[0]},${p[1]}`;
+  if (!seen.has(key)) { seen.add(key); UNIQUE_N.push(p); }
+}
+
+const BLOCK_COUNT = UNIQUE_N.length;
+
+const BLOCK_DATA = UNIQUE_N.map((pos, i) => {
+  const angle = (i / BLOCK_COUNT) * Math.PI * 2;
+  const radius = 3.5 + Math.random() * 2.5;
+  const palette = [
+    { color: '#EA580C', emissive: '#F97316' },
+    { color: '#1D4ED8', emissive: '#3B82F6' },
+    { color: '#0E7490', emissive: '#06B6D4' },
+    { color: '#C2410C', emissive: '#FB923C' },
+    { color: '#1E40AF', emissive: '#60A5FA' },
+  ];
+  const p = palette[i % palette.length];
+  const blockSize = 0.38;
+  return {
+    initialPos: [
+      Math.cos(angle) * radius,
+      (Math.random() - 0.5) * 5,
+      Math.sin(angle) * radius - 2,
+    ] as [number, number, number],
+    targetPos: gridPos(pos[0], pos[1]),
+    color: p.color,
+    emissiveColor: p.emissive,
+    size: [blockSize, blockSize, blockSize] as [number, number, number],
+  };
+});
+
+/* ─────────── FloatingBlock ─────────── */
 function FloatingBlock({
   initialPos,
   targetPos,
@@ -32,7 +94,6 @@ function FloatingBlock({
       ref.current.position.z = initialPos[2] + Math.sin(t.current * 0.5) * 0.2;
       ref.current.rotation.x += delta * 0.25;
       ref.current.rotation.y += delta * 0.2;
-      // Pulse emissive
       const mat = ref.current.material as THREE.MeshStandardMaterial;
       mat.emissiveIntensity = 0.4 + Math.abs(Math.sin(t.current * 1.2)) * 0.6;
     } else if (phase === 'assembling') {
@@ -60,6 +121,7 @@ function FloatingBlock({
   );
 }
 
+/* ─────────── CircuitBeam ─────────── */
 function CircuitBeam({ angle, colorHex }: { angle: number; colorHex: string }) {
   const ref = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
@@ -78,6 +140,7 @@ function CircuitBeam({ angle, colorHex }: { angle: number; colorHex: string }) {
   );
 }
 
+/* ─────────── ParticleField ─────────── */
 function ParticleField() {
   const ref = useRef<THREE.Points>(null);
   const count = 120;
@@ -103,6 +166,7 @@ function ParticleField() {
   );
 }
 
+/* ─────────── CameraFlyThrough ─────────── */
 function CameraFlyThrough({ phase, onComplete }: { phase: string; onComplete: () => void }) {
   const { camera } = useThree();
   const t = useRef(0);
@@ -128,27 +192,7 @@ function CameraFlyThrough({ phase, onComplete }: { phase: string; onComplete: ()
   return null;
 }
 
-const BLOCK_DATA = Array.from({ length: BLOCK_COUNT }, (_, i) => {
-  const angle = (i / BLOCK_COUNT) * Math.PI * 2;
-  const radius = 3.5 + Math.random() * 2.5;
-  // Orange, blue, and cyan palette
-  const palette = [
-    { color: '#EA580C', emissive: '#F97316' },
-    { color: '#1D4ED8', emissive: '#3B82F6' },
-    { color: '#0E7490', emissive: '#06B6D4' },
-    { color: '#C2410C', emissive: '#FB923C' },
-    { color: '#1E40AF', emissive: '#60A5FA' },
-  ];
-  const p = palette[i % palette.length];
-  return {
-    initialPos: [Math.cos(angle) * radius, (Math.random() - 0.5) * 5, Math.sin(angle) * radius - 2] as [number, number, number],
-    targetPos: [(Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, -0.5] as [number, number, number],
-    color: p.color,
-    emissiveColor: p.emissive,
-    size: [0.28 + Math.random() * 0.45, 0.28 + Math.random() * 0.45, 0.28 + Math.random() * 0.35] as [number, number, number],
-  };
-});
-
+/* ─────────── Scene ─────────── */
 function Scene({
   phase,
   onFlythroughComplete,
@@ -359,13 +403,13 @@ export default function IntroScene({ onComplete }: { onComplete: () => void }) {
           {showButton && phase === 'floating' && (
             <button
               onClick={handleEnter}
-              className="pointer-events-auto group relative overflow-hidden px-12 py-4 font-bold text-sm tracking-[0.3em] uppercase transition-all duration-300 hover:scale-105 active:scale-95"
+              className="pointer-events-auto group relative overflow-hidden px-14 py-5 font-bold text-sm tracking-[0.3em] uppercase transition-all duration-300 hover:scale-105 active:scale-95"
               style={{
-                border: '1px solid rgba(249,115,22,0.5)',
-                background: 'rgba(249,115,22,0.08)',
-                color: '#FB923C',
+                border: '1.5px solid rgba(249,115,22,0.7)',
+                background: 'linear-gradient(135deg, rgba(249,115,22,0.2) 0%, rgba(234,88,12,0.12) 100%)',
+                color: '#FFF',
                 clipPath: 'polygon(12px 0%, 100% 0%, calc(100% - 12px) 100%, 0% 100%)',
-                boxShadow: '0 0 30px rgba(249,115,22,0.15), inset 0 0 30px rgba(249,115,22,0.05)',
+                boxShadow: '0 0 40px rgba(249,115,22,0.3), 0 0 80px rgba(249,115,22,0.1), inset 0 0 30px rgba(249,115,22,0.08)',
               }}
             >
               {/* Hover shine */}

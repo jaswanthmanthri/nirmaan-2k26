@@ -5,7 +5,7 @@ import {
   ArrowRight, ArrowLeft, ChevronRight, Upload, X, Loader2,
   Sparkles, Trophy, Zap
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
 // ─── CONFIG ───────────────────────────────────────────────
 // Payment Details (Replace with real values when ready)
@@ -83,6 +83,16 @@ const emptyMember = (): MemberInfo => ({
   year: '',
 });
 
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const fileToBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read payment screenshot.'));
+    reader.readAsDataURL(file);
+  });
+
 export default function RegisterPage() {
   const [step, setStep] = useState(1);
   const [teamName, setTeamName] = useState('');
@@ -130,16 +140,19 @@ export default function RegisterPage() {
 
   const validateStep3 = (): string[] => {
     const errs: string[] = [];
+    const emails = [normalizeEmail(lead.email)];
     members.forEach((m, i) => {
       const num = i + 2;
       if (!m.fullName.trim()) errs.push(`Member ${num}: Full name is required`);
       if (!/^\S+@\S+\.\S+$/.test(m.email)) errs.push(`Member ${num}: Valid email is required`);
+      emails.push(normalizeEmail(m.email));
       if (!/^\d{10}$/.test(m.whatsapp.replace(/\D/g, ''))) errs.push(`Member ${num}: Valid 10-digit WhatsApp number required`);
       if (!m.gender) errs.push(`Member ${num}: Select gender`);
       if (!m.college.trim()) errs.push(`Member ${num}: College name is required`);
       if (!m.stream.trim()) errs.push(`Member ${num}: Stream is required`);
       if (!m.year) errs.push(`Member ${num}: Year is required`);
     });
+    if (new Set(emails).size !== emails.length) errs.push('Each participant must use a different email address');
     return errs;
   };
 
@@ -147,6 +160,10 @@ export default function RegisterPage() {
     const errs: string[] = [];
     if (!transactionId.trim()) errs.push('Transaction ID is required');
     if (!screenshotFile) errs.push('Please upload a screenshot of the payment');
+    if (screenshotFile && screenshotFile.size > 5 * 1024 * 1024) errs.push('Payment screenshot must be less than 5MB');
+    if (screenshotFile && !['image/png', 'image/jpeg', 'image/webp'].includes(screenshotFile.type)) {
+      errs.push('Payment screenshot must be PNG, JPG, JPEG, or WEBP');
+    }
     return errs;
   };
 
@@ -187,91 +204,52 @@ export default function RegisterPage() {
     setScreenshotPreview('');
   };
 
-  // ─── SUBMIT TO SUPABASE ──────────────────────────────────
+  // ─── SUBMIT REGISTRATION ─────────────────────────────────
   const handleSubmit = async () => {
-    const errs = validateStep5();
+    const errs = [...validateStep1(), ...validateStep3(), ...validateStep5()];
     setErrors(errs);
     if (errs.length > 0) return;
     setSubmitting(true);
 
     try {
-      // 1. Upload screenshot to Supabase Storage
-      let screenshotUrl = '';
-      if (screenshotFile) {
-        const fileExt = screenshotFile.name.split('.').pop();
-        const fileName = `${Date.now()}_${teamName.replace(/\s+/g, '_')}.${fileExt}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('payment-screenshots')
-          .upload(fileName, screenshotFile, {
-            cacheControl: '3600',
-            upsert: false,
-          });
-
-        if (uploadError) {
-          throw new Error(`Screenshot upload failed: ${uploadError.message}`);
-        }
-
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from('payment-screenshots')
-          .getPublicUrl(uploadData.path);
-        screenshotUrl = urlData.publicUrl;
+      if (!isSupabaseConfigured) {
+        throw new Error('Registration backend is not configured yet.');
       }
 
-      // 2. Insert registration row
-      const { data: regData, error: regError } = await supabase
-        .from('registrations')
-        .insert({
-          team_name: teamName,
+      if (!screenshotFile) {
+        throw new Error('Please upload a screenshot of the payment');
+      }
+
+      const { data, error } = await supabase.functions.invoke<{ error?: string; registrationId?: string }>('submit-registration', {
+        body: {
+          teamName,
           plan: selectedPlan,
-          team_size: plan.size,
+          teamSize: plan.size,
           price: plan.price,
-          lead_name: lead.fullName,
-          lead_email: lead.email,
-          lead_whatsapp: lead.whatsapp,
-          lead_gender: lead.gender,
-          lead_college: lead.college,
-          lead_stream: lead.stream,
-          lead_year: lead.year,
-          transaction_id: transactionId,
-          screenshot_url: screenshotUrl,
-          status: 'pending',
-        })
-        .select('id')
-        .single();
+          lead,
+          members,
+          transactionId,
+          screenshot: {
+            fileName: screenshotFile.name,
+            contentType: screenshotFile.type,
+            base64: await fileToBase64(screenshotFile),
+          },
+        },
+      });
 
-      if (regError) {
-        throw new Error(`Registration failed: ${regError.message}`);
+      if (error) {
+        throw new Error(await getFunctionErrorMessage(error));
       }
 
-      // 3. Insert team member rows
-      if (members.length > 0 && regData) {
-        const memberRows = members.map(m => ({
-          registration_id: regData.id,
-          full_name: m.fullName,
-          email: m.email,
-          whatsapp: m.whatsapp,
-          gender: m.gender,
-          college: m.college,
-          stream: m.stream,
-          year: m.year,
-        }));
-
-        const { error: membersError } = await supabase
-          .from('team_members')
-          .insert(memberRows);
-
-        if (membersError) {
-          throw new Error(`Failed to save member details: ${membersError.message}`);
-        }
+      if (data?.error) {
+        throw new Error(data.error);
       }
 
       setSubmitting(false);
       setSubmitted(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSubmitting(false);
-      setErrors([err.message || 'Something went wrong. Please try again.']);
+      setErrors([err instanceof Error ? err.message : 'Something went wrong. Please try again.']);
     }
   };
 
@@ -843,4 +821,23 @@ function PaymentRow({ label, value, mono }: { label: string; value: string; mono
       <span className={`text-xs font-bold text-slate-200 ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   );
+}
+
+async function getFunctionErrorMessage(error: unknown) {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'context' in error &&
+    error.context instanceof Response
+  ) {
+    try {
+      const body = await error.context.clone().json();
+      if (typeof body?.error === 'string') return body.error;
+    } catch {
+      // Fall through to the generic Supabase function error below.
+    }
+  }
+
+  if (error instanceof Error && error.message) return error.message;
+  return 'Registration failed. Please try again.';
 }
