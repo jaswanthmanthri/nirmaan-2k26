@@ -46,18 +46,20 @@ function ImageCarousel() {
   const [current, setCurrent] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const next = () => setCurrent(c => (c + 1) % SLIDES.length);
   const prev = () => setCurrent(c => (c - 1 + SLIDES.length) % SLIDES.length);
 
   useEffect(() => {
     timerRef.current = setInterval(next, 4500);
-    return () => clearInterval(timerRef.current);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
   const resetTimer = () => {
-    clearInterval(timerRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(next, 4500);
   };
 

@@ -79,8 +79,10 @@ Deno.serve(async (req) => {
     }
 
     const clean = validateAndNormalize(payload);
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    const emailFrom = Deno.env.get('CONFIRMATION_EMAIL_FROM') || 'NIRMAAN 2K26 <onboarding@resend.dev>';
+    const brevoApiKey = Deno.env.get('BREVO_API_KEY');
+    const brevoSenderName = Deno.env.get('BREVO_SENDER_NAME') || 'NIRMAAN 2K26';
+    const brevoSenderEmail = Deno.env.get('BREVO_SENDER_EMAIL') || 'registrations@nirmaan2k26.tech';
+    const brevoReplyToEmail = Deno.env.get('BREVO_REPLY_TO_EMAIL') || 'nirmaanhackathon.2k26@gmail.com';
 
     const duplicate = await findDuplicate(supabase, clean);
     if (duplicate) {
@@ -164,11 +166,14 @@ Deno.serve(async (req) => {
       return json({ error: messageForDatabaseError(participantsError.message) }, 409);
     }
 
-    if (resendApiKey) {
+    if (brevoApiKey) {
       await sendConfirmationEmail({
-        apiKey: resendApiKey,
-        from: emailFrom,
-        to: clean.lead.email,
+        apiKey: brevoApiKey,
+        senderName: brevoSenderName,
+        senderEmail: brevoSenderEmail,
+        replyToEmail: brevoReplyToEmail,
+        toEmail: clean.lead.email,
+        toName: clean.lead.fullName,
         leadName: clean.lead.fullName,
         teamName: clean.teamName,
         planLabel: plans[clean.plan].label,
@@ -180,7 +185,7 @@ Deno.serve(async (req) => {
 
     return json({
       registrationId: registration.id,
-      emailSent: Boolean(resendApiKey),
+      emailSent: Boolean(brevoApiKey),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
@@ -366,8 +371,11 @@ async function findDuplicate(supabase: ReturnType<typeof createClient>, clean: R
 
 async function sendConfirmationEmail(params: {
   apiKey: string;
-  from: string;
-  to: string;
+  senderName: string;
+  senderEmail: string;
+  replyToEmail: string;
+  toEmail: string;
+  toName: string;
   leadName: string;
   teamName: string;
   planLabel: string;
@@ -375,17 +383,30 @@ async function sendConfirmationEmail(params: {
   price: number;
   transactionId: string;
 }) {
-  const response = await fetch('https://api.resend.com/emails', {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${params.apiKey}`,
+      'api-key': params.apiKey,
       'Content-Type': 'application/json',
+      accept: 'application/json',
     },
     body: JSON.stringify({
-      from: params.from,
-      to: params.to,
+      sender: {
+        name: params.senderName,
+        email: params.senderEmail,
+      },
+      replyTo: {
+        email: params.replyToEmail,
+        name: 'NIRMAAN 2K26 Support',
+      },
+      to: [
+        {
+          email: params.toEmail,
+          name: params.toName,
+        },
+      ],
       subject: 'NIRMAAN 2K26 Registration Received',
-      html: `
+      htmlContent: `
         <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
           <h2>NIRMAAN 2K26 Registration Received</h2>
           <p>Hi ${escapeHtml(params.leadName)},</p>
@@ -404,7 +425,7 @@ async function sendConfirmationEmail(params: {
   });
 
   if (!response.ok) {
-    console.error('Resend email failed', await response.text());
+    console.error('Brevo email failed', await response.text());
   }
 }
 

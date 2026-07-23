@@ -5,8 +5,10 @@ Secure registration endpoint for NIRMAAN 2K26.
 Required Supabase secrets:
 
 ```bash
-supabase secrets set RESEND_API_KEY=your_resend_key
-supabase secrets set CONFIRMATION_EMAIL_FROM="NIRMAAN 2K26 <registrations@yourdomain.com>"
+supabase secrets set BREVO_API_KEY=your_brevo_api_key
+supabase secrets set BREVO_SENDER_NAME="NIRMAAN 2K26"
+supabase secrets set BREVO_SENDER_EMAIL="registrations@nirmaan2k26.tech"
+supabase secrets set BREVO_REPLY_TO_EMAIL="nirmaanhackathon.2k26@gmail.com"
 ```
 
-`CONFIRMATION_EMAIL_FROM` can temporarily use Resend's test sender during development, but production email should use a verified domain.
+Make sure the sender email is created and verified in Brevo, and authenticate `nirmaan2k26.tech` in Brevo before sending production mail.

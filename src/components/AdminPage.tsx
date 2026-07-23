@@ -44,6 +44,8 @@ type Registration = {
   transaction_id: string;
   screenshot_path: string;
   payment_status: PaymentStatus;
+  verified_email_sent_at: string | null;
+  verified_email_error: string | null;
   created_at: string;
   updated_at: string;
   participants: Participant[];
@@ -52,7 +54,7 @@ type Registration = {
 type AdminResponse = {
   registrations?: Registration[];
   signedUrl?: string;
-  registration?: Pick<Registration, 'id' | 'payment_status' | 'updated_at'>;
+  registration?: Pick<Registration, 'id' | 'payment_status' | 'updated_at' | 'verified_email_sent_at' | 'verified_email_error'>;
   error?: string;
 };
 
@@ -190,7 +192,7 @@ export default function AdminPage() {
       const data = await callAdmin({ action: 'list' }, activeToken);
       const next = data.registrations || [];
       setRegistrations(next);
-      setSelectedId((current) => current || next[0]?.id || '');
+      setSelectedId((current) => next.some((registration) => registration.id === current) ? current : next[0]?.id || '');
       setToken(activeToken);
       sessionStorage.setItem('nirmaan-admin-token', activeToken);
     } catch (err) {
@@ -212,7 +214,13 @@ export default function AdminPage() {
       setRegistrations((current) =>
         current.map((item) =>
           item.id === registrationId && data.registration
-            ? { ...item, payment_status: data.registration.payment_status, updated_at: data.registration.updated_at }
+            ? {
+                ...item,
+                payment_status: data.registration.payment_status,
+                updated_at: data.registration.updated_at,
+                verified_email_sent_at: data.registration.verified_email_sent_at ?? item.verified_email_sent_at,
+                verified_email_error: data.registration.verified_email_error ?? item.verified_email_error,
+              }
             : item,
         ),
       );
@@ -540,6 +548,22 @@ export default function AdminPage() {
                   </div>
                   <StatusBadge status={selected.payment_status} />
                 </div>
+
+                {selected.payment_status === 'verified' && (
+                  <div
+                    className={`mb-4 rounded-xl border p-3 text-xs ${
+                      selected.verified_email_error
+                        ? 'border-red-500/30 bg-red-500/10 text-red-200'
+                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                    }`}
+                  >
+                    {selected.verified_email_error
+                      ? `Verification email error: ${selected.verified_email_error}`
+                      : selected.verified_email_sent_at
+                        ? 'Verification email sent to the team lead.'
+                        : 'Verification email will be sent once verification is saved.'}
+                  </div>
+                )}
 
                 <div className="mb-5 grid grid-cols-2 gap-3">
                   <InfoTile label="Plan" value={`${selected.plan} / ${selected.team_size}`} />
