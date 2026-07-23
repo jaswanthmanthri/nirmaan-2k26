@@ -9,6 +9,8 @@ set
 where college_location is null
    or state is null;
 
+drop function if exists public.get_registration_export();
+
 create or replace function public.get_registration_export()
 returns table (
   registration_id uuid,
