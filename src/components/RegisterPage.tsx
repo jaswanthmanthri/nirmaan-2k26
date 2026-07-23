@@ -69,6 +69,8 @@ interface MemberInfo {
   whatsapp: string;
   gender: string;
   college: string;
+  collegeLocation: string;
+  state: string;
   stream: string;
   year: string;
 }
@@ -79,11 +81,37 @@ const emptyMember = (): MemberInfo => ({
   whatsapp: '',
   gender: '',
   college: '',
+  collegeLocation: '',
+  state: '',
   stream: '',
   year: '',
 });
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+type FieldStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error';
+
+type FieldAvailability = {
+  status: FieldStatus;
+  message: string;
+};
+
+type AvailabilityState = {
+  teamName: FieldAvailability;
+  leadEmail: FieldAvailability;
+  transactionId: FieldAvailability;
+  memberEmails: FieldAvailability[];
+};
+
+const emptyAvailability = (memberCount: number): AvailabilityState => ({
+  teamName: { status: 'idle', message: 'Enter a team name to check availability.' },
+  leadEmail: { status: 'idle', message: 'Enter a valid email to check availability.' },
+  transactionId: { status: 'idle', message: 'Enter a transaction ID to check availability.' },
+  memberEmails: Array.from({ length: memberCount }, () => ({
+    status: 'idle',
+    message: 'Enter a valid email to check availability.',
+  })),
+});
 
 const fileToBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -105,6 +133,7 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [availability, setAvailability] = useState<AvailabilityState>(() => emptyAvailability(1));
   const containerRef = useRef<HTMLDivElement>(null);
 
   const plan = TEAM_OPTIONS.find(o => o.key === selectedPlan)!;
@@ -124,6 +153,122 @@ export default function RegisterPage() {
     });
   }, [selectedPlan, plan.size]);
 
+  useEffect(() => {
+    setAvailability((current) => emptyAvailability(members.length));
+  }, [members.length]);
+
+  useEffect(() => {
+    const teamNameValue = teamName.trim();
+    const leadEmailValue = normalizeEmail(lead.email);
+    const transactionValue = transactionId.trim();
+    const memberEmails = members.map((member) => normalizeEmail(member.email));
+    const anyInput = teamNameValue || leadEmailValue || transactionValue || memberEmails.some(Boolean);
+
+    if (!anyInput) {
+      setAvailability(emptyAvailability(members.length));
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      if (!isSupabaseConfigured) return;
+
+      const nextAvailability = emptyAvailability(members.length);
+      const checks = {
+        teamName: teamNameValue.length >= 3,
+        leadEmail: /^\S+@\S+\.\S+$/.test(leadEmailValue),
+        transactionId: transactionValue.length >= 4,
+        memberEmails: memberEmails.map((email) => /^\S+@\S+\.\S+$/.test(email)),
+      };
+
+      if (checks.teamName) nextAvailability.teamName = { status: 'checking', message: 'Checking team name...' };
+      else if (teamNameValue) nextAvailability.teamName = { status: 'idle', message: 'Team name must be at least 3 characters.' };
+
+      if (checks.leadEmail) nextAvailability.leadEmail = { status: 'checking', message: 'Checking email...' };
+      else if (lead.email.trim()) nextAvailability.leadEmail = { status: 'idle', message: 'Enter a valid email to check availability.' };
+
+      if (checks.transactionId) nextAvailability.transactionId = { status: 'checking', message: 'Checking transaction ID...' };
+      else if (transactionValue) nextAvailability.transactionId = { status: 'idle', message: 'Transaction ID must be at least 4 characters.' };
+
+      nextAvailability.memberEmails = memberEmails.map((email, idx) => {
+        if (!email) return { status: 'idle', message: 'Enter a valid email to check availability.' };
+        if (!checks.memberEmails[idx]) return { status: 'idle', message: 'Enter a valid email to check availability.' };
+        return { status: 'checking', message: 'Checking email...' };
+      });
+
+      setAvailability(nextAvailability);
+
+      try {
+        const { data, error } = await supabase.functions.invoke<{
+          teamNameTaken?: boolean;
+          transactionIdTaken?: boolean;
+          takenEmails?: string[];
+          error?: string;
+        }>('submit-registration', {
+          body: {
+            action: 'validate',
+            teamName: checks.teamName ? teamNameValue : undefined,
+            transactionId: checks.transactionId ? transactionValue : undefined,
+            leadEmail: checks.leadEmail ? leadEmailValue : undefined,
+            memberEmails: memberEmails.filter((email, idx) => checks.memberEmails[idx] && email),
+          },
+        });
+
+        if (error) {
+          throw new Error(await getFunctionErrorMessage(error));
+        }
+
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+
+        if (!data) return;
+
+        const takenEmails = new Set((data.takenEmails || []).map(normalizeEmail));
+        setAvailability({
+          teamName: checks.teamName
+            ? {
+                status: data.teamNameTaken ? 'taken' : 'available',
+                message: data.teamNameTaken ? 'Team name already exists.' : 'Team name is available.',
+              }
+            : nextAvailability.teamName,
+          leadEmail: checks.leadEmail
+            ? {
+                status: takenEmails.has(leadEmailValue) ? 'taken' : 'available',
+                message: takenEmails.has(leadEmailValue) ? 'Email already exists.' : 'Email is available.',
+              }
+            : nextAvailability.leadEmail,
+          transactionId: checks.transactionId
+            ? {
+                status: data.transactionIdTaken ? 'taken' : 'available',
+                message: data.transactionIdTaken ? 'Transaction ID already exists.' : 'Transaction ID is available.',
+              }
+            : nextAvailability.transactionId,
+          memberEmails: memberEmails.map((email, idx) => {
+            if (!checks.memberEmails[idx] || !email) {
+              return nextAvailability.memberEmails[idx] || { status: 'idle', message: 'Enter a valid email to check availability.' };
+            }
+            return {
+              status: takenEmails.has(email) ? 'taken' : 'available',
+              message: takenEmails.has(email) ? 'Email already exists.' : 'Email is available.',
+            };
+          }),
+        });
+      } catch {
+        setAvailability((current) => ({
+          teamName: checks.teamName ? { status: 'error', message: 'Could not check team name right now.' } : current.teamName,
+          leadEmail: checks.leadEmail ? { status: 'error', message: 'Could not check email right now.' } : current.leadEmail,
+          transactionId: checks.transactionId ? { status: 'error', message: 'Could not check transaction ID right now.' } : current.transactionId,
+          memberEmails: memberEmails.map((email, idx) => {
+            if (!checks.memberEmails[idx] || !email) return current.memberEmails[idx] || { status: 'idle', message: 'Enter a valid email to check availability.' };
+            return { status: 'error', message: 'Could not check email right now.' };
+          }),
+        }));
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [teamName, lead.email, transactionId, members, selectedPlan]);
+
   // ─── VALIDATION ─────────────────────────────────────────
   const validateStep1 = (): string[] => {
     const errs: string[] = [];
@@ -133,6 +278,8 @@ export default function RegisterPage() {
     if (!/^\d{10}$/.test(lead.whatsapp.replace(/\D/g, ''))) errs.push('Valid 10-digit WhatsApp number is required');
     if (!lead.gender) errs.push('Please select gender');
     if (!lead.college.trim()) errs.push('College name is required');
+    if (!lead.collegeLocation.trim()) errs.push('College location is required');
+    if (!lead.state.trim()) errs.push('State is required');
     if (!lead.stream.trim()) errs.push('Stream is required');
     if (!lead.year) errs.push('Year is required');
     return errs;
@@ -149,6 +296,8 @@ export default function RegisterPage() {
       if (!/^\d{10}$/.test(m.whatsapp.replace(/\D/g, ''))) errs.push(`Member ${num}: Valid 10-digit WhatsApp number required`);
       if (!m.gender) errs.push(`Member ${num}: Select gender`);
       if (!m.college.trim()) errs.push(`Member ${num}: College name is required`);
+      if (!m.collegeLocation.trim()) errs.push(`Member ${num}: College location is required`);
+      if (!m.state.trim()) errs.push(`Member ${num}: State is required`);
       if (!m.stream.trim()) errs.push(`Member ${num}: Stream is required`);
       if (!m.year) errs.push(`Member ${num}: Year is required`);
     });
@@ -221,11 +370,11 @@ export default function RegisterPage() {
       }
 
       const { data, error } = await supabase.functions.invoke<{ error?: string; registrationId?: string }>('submit-registration', {
-        body: {
-          teamName,
-          plan: selectedPlan,
-          teamSize: plan.size,
-          price: plan.price,
+          body: {
+            teamName,
+            plan: selectedPlan,
+            teamSize: plan.size,
+            price: plan.price,
           lead,
           members,
           transactionId,
@@ -413,16 +562,33 @@ export default function RegisterPage() {
             <div className="animate-[popCenterCard_0.35s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
               <StepHeader number={1} title="Team & Lead Information" subtitle="Enter your team name and team lead's details." />
               <div className="space-y-5">
-                <FormField label="Team Name" value={teamName} onChange={setTeamName} placeholder="e.g. The Innovators" />
+                <FormField
+                  label="Team Name"
+                  value={teamName}
+                  onChange={setTeamName}
+                  placeholder="ENTER TEAM NAME"
+                  status={availability.teamName.status}
+                  statusText={availability.teamName.message}
+                />
                 <div className="h-px" style={{ background: 'rgba(59,130,246,0.1)' }} />
                 <p className="text-xs text-orange-400/80 font-mono font-bold uppercase tracking-wider">Team Lead Details</p>
                 <div className="grid md:grid-cols-2 gap-4">
-                  <FormField label="Full Name" value={lead.fullName} onChange={v => setLead({ ...lead, fullName: v })} placeholder="John Doe" />
-                  <FormField label="Email" type="email" value={lead.email} onChange={v => setLead({ ...lead, email: v })} placeholder="lead@example.com" />
-                  <FormField label="WhatsApp No." type="tel" value={lead.whatsapp} onChange={v => setLead({ ...lead, whatsapp: v })} placeholder="9876543210" />
+                  <FormField label="Full Name" value={lead.fullName} onChange={v => setLead({ ...lead, fullName: v })} placeholder="ENTER FULL NAME" />
+                  <FormField
+                    label="Email"
+                    type="email"
+                    value={lead.email}
+                    onChange={v => setLead({ ...lead, email: v })}
+                    placeholder="ENTER EMAIL"
+                    status={availability.leadEmail.status}
+                    statusText={availability.leadEmail.message}
+                  />
+                  <FormField label="WhatsApp No." type="tel" value={lead.whatsapp} onChange={v => setLead({ ...lead, whatsapp: v })} placeholder="ENTER WHATSAPP NUMBER" />
                   <FormSelect label="Gender" value={lead.gender} onChange={v => setLead({ ...lead, gender: v })} options={GENDER_OPTIONS} placeholder="Select gender" />
-                  <FormField label="College Name" value={lead.college} onChange={v => setLead({ ...lead, college: v })} placeholder="ANITS" />
-                  <FormField label="Stream" value={lead.stream} onChange={v => setLead({ ...lead, stream: v })} placeholder="CSE - Data Science" />
+                  <FormField label="College Name" value={lead.college} onChange={v => setLead({ ...lead, college: v })} placeholder="ENTER COLLEGE NAME" />
+                  <FormField label="College Location" value={lead.collegeLocation} onChange={v => setLead({ ...lead, collegeLocation: v })} placeholder="ENTER COLLEGE LOCATION" />
+                  <FormField label="State" value={lead.state} onChange={v => setLead({ ...lead, state: v })} placeholder="ENTER STATE" />
+                  <FormField label="Stream" value={lead.stream} onChange={v => setLead({ ...lead, stream: v })} placeholder="ENTER STREAM" />
                   <FormSelect label="Year" value={lead.year} onChange={v => setLead({ ...lead, year: v })} options={YEAR_OPTIONS} placeholder="Select year" />
                 </div>
               </div>
@@ -507,12 +673,22 @@ export default function RegisterPage() {
                       Member {idx + 2}
                     </p>
                     <div className="grid md:grid-cols-2 gap-4">
-                      <FormField label="Full Name" value={m.fullName} onChange={v => updateMember(idx, 'fullName', v)} placeholder="Jane Doe" />
-                      <FormField label="Email" type="email" value={m.email} onChange={v => updateMember(idx, 'email', v)} placeholder="member@example.com" />
-                      <FormField label="WhatsApp No." type="tel" value={m.whatsapp} onChange={v => updateMember(idx, 'whatsapp', v)} placeholder="9876543210" />
+                      <FormField label="Full Name" value={m.fullName} onChange={v => updateMember(idx, 'fullName', v)} placeholder="ENTER FULL NAME" />
+                      <FormField
+                        label="Email"
+                        type="email"
+                        value={m.email}
+                        onChange={v => updateMember(idx, 'email', v)}
+                        placeholder="ENTER EMAIL"
+                        status={availability.memberEmails[idx]?.status}
+                        statusText={availability.memberEmails[idx]?.message}
+                      />
+                      <FormField label="WhatsApp No." type="tel" value={m.whatsapp} onChange={v => updateMember(idx, 'whatsapp', v)} placeholder="ENTER WHATSAPP NUMBER" />
                       <FormSelect label="Gender" value={m.gender} onChange={v => updateMember(idx, 'gender', v)} options={GENDER_OPTIONS} placeholder="Select gender" />
-                      <FormField label="College Name" value={m.college} onChange={v => updateMember(idx, 'college', v)} placeholder="ANITS" />
-                      <FormField label="Stream" value={m.stream} onChange={v => updateMember(idx, 'stream', v)} placeholder="CSE - Data Science" />
+                      <FormField label="College Name" value={m.college} onChange={v => updateMember(idx, 'college', v)} placeholder="ENTER COLLEGE NAME" />
+                      <FormField label="College Location" value={m.collegeLocation} onChange={v => updateMember(idx, 'collegeLocation', v)} placeholder="ENTER COLLEGE LOCATION" />
+                      <FormField label="State" value={m.state} onChange={v => updateMember(idx, 'state', v)} placeholder="ENTER STATE" />
+                      <FormField label="Stream" value={m.stream} onChange={v => updateMember(idx, 'stream', v)} placeholder="ENTER STREAM" />
                       <FormSelect label="Year" value={m.year} onChange={v => updateMember(idx, 'year', v)} options={YEAR_OPTIONS} placeholder="Select year" />
                     </div>
                   </div>
@@ -538,6 +714,8 @@ export default function RegisterPage() {
                 <ReviewRow label="WhatsApp" value={lead.whatsapp} />
                 <ReviewRow label="Gender" value={lead.gender} />
                 <ReviewRow label="College" value={lead.college} />
+                <ReviewRow label="College Location" value={lead.collegeLocation} />
+                <ReviewRow label="State" value={lead.state} />
                 <ReviewRow label="Stream" value={lead.stream} />
                 <ReviewRow label="Year" value={lead.year} />
               </ReviewSection>
@@ -556,6 +734,8 @@ export default function RegisterPage() {
                   <ReviewRow label="WhatsApp" value={m.whatsapp} />
                   <ReviewRow label="Gender" value={m.gender} />
                   <ReviewRow label="College" value={m.college} />
+                  <ReviewRow label="College Location" value={m.collegeLocation} />
+                  <ReviewRow label="State" value={m.state} />
                   <ReviewRow label="Stream" value={m.stream} />
                   <ReviewRow label="Year" value={m.year} />
                 </ReviewSection>
@@ -618,7 +798,9 @@ export default function RegisterPage() {
                   label="Transaction ID / UTR Number"
                   value={transactionId}
                   onChange={setTransactionId}
-                  placeholder="Enter your transaction ID"
+                  placeholder="ENTER TRANSACTION ID"
+                  status={availability.transactionId.status}
+                  statusText={availability.transactionId.message}
                 />
 
                 {/* Screenshot Upload */}
@@ -735,10 +917,18 @@ function StepHeader({ number, title, subtitle }: { number: number; title: string
 }
 
 function FormField({
-  label, value, onChange, placeholder, type = 'text',
+  label, value, onChange, placeholder, type = 'text', status, statusText,
 }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; status?: FieldStatus; statusText?: string;
 }) {
+  const statusClasses: Record<FieldStatus, string> = {
+    idle: 'text-slate-500',
+    checking: 'text-blue-300',
+    available: 'text-emerald-300',
+    taken: 'text-red-300',
+    error: 'text-amber-300',
+  };
+
   return (
     <div>
       <label className="block text-xs font-bold text-slate-400 mb-1.5 font-mono uppercase tracking-wider">{label}</label>
@@ -755,6 +945,11 @@ function FormField({
         onFocus={e => { e.target.style.borderColor = 'rgba(249,115,22,0.4)'; e.target.style.boxShadow = '0 0 15px rgba(249,115,22,0.1)'; }}
         onBlur={e => { e.target.style.borderColor = 'rgba(59,130,246,0.15)'; e.target.style.boxShadow = 'none'; }}
       />
+      {statusText && (
+        <p className={`mt-1.5 text-[11px] font-mono ${statusClasses[status || 'idle']}`}>
+          {statusText}
+        </p>
+      )}
     </div>
   );
 }

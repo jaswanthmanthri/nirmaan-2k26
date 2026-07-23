@@ -79,6 +79,8 @@ async function listRegistrations(supabase: ReturnType<typeof createClient>) {
         whatsapp,
         gender,
         college,
+        college_location,
+        state,
         stream,
         year,
         created_at

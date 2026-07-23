@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import {
   AlertCircle,
@@ -28,6 +28,8 @@ type Participant = {
   whatsapp: string;
   gender: string;
   college: string;
+  college_location: string;
+  state: string;
   stream: string;
   year: string;
   created_at: string;
@@ -79,15 +81,17 @@ export default function AdminPage() {
   const [selectedId, setSelectedId] = useState<string>('');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | PaymentStatus>('all');
+  const [planFilter, setPlanFilter] = useState<'all' | Registration['plan']>('all');
+  const [collegeFilter, setCollegeFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const [stateFilter, setStateFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [screenshotUrl, setScreenshotUrl] = useState('');
   const [screenshotLoading, setScreenshotLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState('');
 
-  const selected = registrations.find((item) => item.id === selectedId) || registrations[0];
-
-  const filtered = registrations.filter((registration) => {
+  const filtered = useMemo(() => registrations.filter((registration) => {
     const haystack = [
       registration.team_name,
       registration.plan,
@@ -98,6 +102,8 @@ export default function AdminPage() {
         participant.email,
         participant.whatsapp,
         participant.college,
+        participant.college_location,
+        participant.state,
         participant.stream,
         participant.year,
       ]),
@@ -105,8 +111,27 @@ export default function AdminPage() {
 
     const matchesSearch = haystack.includes(query.trim().toLowerCase());
     const matchesStatus = statusFilter === 'all' || registration.payment_status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+    const matchesPlan = planFilter === 'all' || registration.plan === planFilter;
+    const matchesCollege = collegeFilter === 'all' || registration.participants.some((participant) => participant.college === collegeFilter);
+    const matchesLocation = locationFilter === 'all' || registration.participants.some((participant) => participant.college_location === locationFilter);
+    const matchesState = stateFilter === 'all' || registration.participants.some((participant) => participant.state === stateFilter);
+    return matchesSearch && matchesStatus && matchesPlan && matchesCollege && matchesLocation && matchesState;
+  }), [registrations, query, statusFilter, planFilter, collegeFilter, locationFilter, stateFilter]);
+
+  const selected = useMemo(
+    () => registrations.find((item) => item.id === selectedId) || filtered[0],
+    [registrations, filtered, selectedId],
+  );
+  const selectedLead = selected ? getLead(selected) : undefined;
+
+  const filterOptions = useMemo(() => {
+    const unique = (items: string[]) => [...new Set(items.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return {
+      colleges: unique(registrations.flatMap((registration) => registration.participants.map((participant) => participant.college))),
+      locations: unique(registrations.flatMap((registration) => registration.participants.map((participant) => participant.college_location))),
+      states: unique(registrations.flatMap((registration) => registration.participants.map((participant) => participant.state))),
+    };
+  }, [registrations]);
 
   const totals = registrations.reduce(
     (acc, registration) => {
@@ -125,6 +150,17 @@ export default function AdminPage() {
       void loadRegistrations(token);
     }
   }, []);
+
+  useEffect(() => {
+    if (!filtered.length) {
+      if (selectedId) setSelectedId('');
+      return;
+    }
+
+    if (!filtered.some((registration) => registration.id === selectedId)) {
+      setSelectedId(filtered[0].id);
+    }
+  }, [filtered, selectedId]);
 
   const callAdmin = async (body: Record<string, unknown>, activeToken = token) => {
     if (!isSupabaseConfigured) {
@@ -217,6 +253,8 @@ export default function AdminPage() {
         participant_whatsapp: participant.whatsapp,
         participant_gender: participant.gender,
         participant_college: participant.college,
+        participant_college_location: participant.college_location,
+        participant_state: participant.state,
         participant_stream: participant.stream,
         participant_year: participant.year,
         screenshot_path: registration.screenshot_path,
@@ -329,33 +367,69 @@ export default function AdminPage() {
           <StatCard label="Verified Rs." value={totals.verifiedRevenue} icon={ShieldCheck} accent="text-orange-300" />
         </section>
 
-        <section className="mb-5 grid gap-3 rounded-2xl border border-blue-500/15 bg-slate-950/70 p-4 backdrop-blur-xl lg:grid-cols-[1fr_auto_auto]">
-          <div className="flex items-center gap-3 rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 py-3">
-            <Search className="h-4 w-4 text-slate-500" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600"
-              placeholder="Search team, lead, email, phone, college, transaction..."
-            />
-          </div>
+        <section className="mb-5 rounded-2xl border border-blue-500/15 bg-slate-950/70 p-4 backdrop-blur-xl">
+          <div className="grid gap-3 xl:grid-cols-6">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 py-3 xl:col-span-2">
+              <Search className="h-4 w-4 text-slate-500" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600"
+                placeholder="Search team, lead, email, phone, college, location..."
+              />
+            </div>
 
-          <div className="flex items-center gap-3 rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 py-3">
-            <Filter className="h-4 w-4 text-slate-500" />
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as 'all' | PaymentStatus)}
-              className="bg-transparent text-sm font-bold text-white outline-none"
-            >
+            <FilterSelect label="Status" value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | PaymentStatus)}>
               <option className="bg-slate-950" value="all">All Status</option>
               <option className="bg-slate-950" value="pending">Pending</option>
               <option className="bg-slate-950" value="verified">Verified</option>
               <option className="bg-slate-950" value="rejected">Rejected</option>
-            </select>
+            </FilterSelect>
+
+            <FilterSelect label="Plan" value={planFilter} onChange={(value) => setPlanFilter(value as 'all' | Registration['plan'])}>
+              <option className="bg-slate-950" value="all">All Plans</option>
+              <option className="bg-slate-950" value="duo">Duo</option>
+              <option className="bg-slate-950" value="trio">Trio</option>
+              <option className="bg-slate-950" value="squad">Squad</option>
+            </FilterSelect>
+
+            <FilterSelect label="College" value={collegeFilter} onChange={setCollegeFilter}>
+              <option className="bg-slate-950" value="all">All Colleges</option>
+              {filterOptions.colleges.map((college) => (
+                <option key={college} className="bg-slate-950" value={college}>{college}</option>
+              ))}
+            </FilterSelect>
+
+            <FilterSelect label="Location" value={locationFilter} onChange={setLocationFilter}>
+              <option className="bg-slate-950" value="all">All Locations</option>
+              {filterOptions.locations.map((location) => (
+                <option key={location} className="bg-slate-950" value={location}>{location}</option>
+              ))}
+            </FilterSelect>
+
+            <FilterSelect label="State" value={stateFilter} onChange={setStateFilter}>
+              <option className="bg-slate-950" value="all">All States</option>
+              {filterOptions.states.map((state) => (
+                <option key={state} className="bg-slate-950" value={state}>{state}</option>
+              ))}
+            </FilterSelect>
           </div>
 
-          <div className="flex items-center justify-center rounded-xl border border-orange-500/20 bg-orange-500/10 px-4 py-3 font-mono text-xs font-bold uppercase tracking-wider text-orange-200">
-            {filtered.length} shown
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <ChipButton label="Clear filters" onClick={() => {
+                setQuery('');
+                setStatusFilter('all');
+                setPlanFilter('all');
+                setCollegeFilter('all');
+                setLocationFilter('all');
+                setStateFilter('all');
+              }} />
+            </div>
+
+            <div className="flex items-center justify-center rounded-xl border border-orange-500/20 bg-orange-500/10 px-4 py-3 font-mono text-xs font-bold uppercase tracking-wider text-orange-200">
+              {filtered.length} shown
+            </div>
           </div>
         </section>
 
@@ -390,6 +464,7 @@ export default function AdminPage() {
                         <td className="px-4 py-4">
                           <div className="text-sm font-semibold text-slate-200">{lead?.full_name || 'No lead'}</div>
                           <div className="mt-1 text-xs text-slate-500">{lead?.email}</div>
+                          <div className="mt-1 text-xs text-slate-500">{lead?.college_location} / {lead?.state}</div>
                         </td>
                         <td className="px-4 py-4">
                           <div className="text-sm font-bold capitalize text-slate-200">{registration.plan}</div>
@@ -470,6 +545,8 @@ export default function AdminPage() {
                   <InfoTile label="Plan" value={`${selected.plan} / ${selected.team_size}`} />
                   <InfoTile label="Amount" value={`Rs. ${selected.price}`} />
                   <InfoTile label="Transaction" value={selected.transaction_id} wide />
+                  <InfoTile label="Lead College" value={selectedLead?.college || 'Not provided'} />
+                  <InfoTile label="Lead Location" value={selectedLead ? `${selectedLead.college_location} / ${selectedLead.state}` : 'Not provided'} />
                 </div>
 
                 <div className="mb-5 flex gap-2">
@@ -501,6 +578,7 @@ export default function AdminPage() {
                         <p>{participant.email}</p>
                         <p>{participant.whatsapp}</p>
                         <p>{participant.college}</p>
+                        <p>{participant.college_location} / {participant.state}</p>
                         <p>{participant.stream} / {participant.year}</p>
                         <p>{participant.gender}</p>
                       </div>
@@ -581,6 +659,49 @@ function IconButton({
     >
       {children}
     </button>
+  );
+}
+
+function ChipButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-xs font-bold text-slate-200 transition hover:border-orange-400/40 hover:text-orange-200"
+    >
+      {label}
+    </button>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-2 rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 py-3">
+      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full bg-transparent text-sm font-bold text-white outline-none"
+      >
+        {children}
+      </select>
+    </label>
   );
 }
 

@@ -8,11 +8,14 @@ type ParticipantInput = {
   whatsapp: string;
   gender: string;
   college: string;
+  collegeLocation: string;
+  state: string;
   stream: string;
   year: string;
 };
 
-type RegistrationPayload = {
+type SubmissionPayload = {
+  action?: 'submit';
   teamName: string;
   plan: PlanKey;
   teamSize: number;
@@ -26,6 +29,16 @@ type RegistrationPayload = {
     base64: string;
   };
 };
+
+type ValidationPayload = {
+  action: 'validate';
+  teamName?: string;
+  transactionId?: string;
+  leadEmail?: string;
+  memberEmails?: string[];
+};
+
+type RegistrationPayload = SubmissionPayload | ValidationPayload;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,16 +66,21 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json() as RegistrationPayload;
-    const clean = validateAndNormalize(payload);
 
     const supabaseUrl = requiredEnv('SUPABASE_URL');
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    const emailFrom = Deno.env.get('CONFIRMATION_EMAIL_FROM') || 'NIRMAAN 2K26 <onboarding@resend.dev>';
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
+
+    if (payload.action === 'validate') {
+      return await validateAvailability(supabase, payload);
+    }
+
+    const clean = validateAndNormalize(payload);
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    const emailFrom = Deno.env.get('CONFIRMATION_EMAIL_FROM') || 'NIRMAAN 2K26 <onboarding@resend.dev>';
 
     const duplicate = await findDuplicate(supabase, clean);
     if (duplicate) {
@@ -115,6 +133,8 @@ Deno.serve(async (req) => {
         whatsapp: clean.lead.whatsapp,
         gender: clean.lead.gender,
         college: clean.lead.college,
+        college_location: clean.lead.collegeLocation,
+        state: clean.lead.state,
         stream: clean.lead.stream,
         year: clean.lead.year,
       },
@@ -127,6 +147,8 @@ Deno.serve(async (req) => {
         whatsapp: member.whatsapp,
         gender: member.gender,
         college: member.college,
+        college_location: member.collegeLocation,
+        state: member.state,
         stream: member.stream,
         year: member.year,
       })),
@@ -166,9 +188,13 @@ Deno.serve(async (req) => {
   }
 });
 
-function validateAndNormalize(payload: RegistrationPayload) {
+function validateAndNormalize(payload: SubmissionPayload) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Invalid registration data.');
+  }
+
+  if ('action' in payload && payload.action === 'validate') {
+    throw new Error('Validation payload is missing required registration fields.');
   }
 
   const plan = payload.plan;
@@ -243,9 +269,64 @@ function normalizeParticipant(participant: ParticipantInput, label: string) {
     whatsapp,
     gender: requiredText(participant.gender, `${label} gender`),
     college: requiredText(participant.college, `${label} college`),
+    collegeLocation: requiredText(participant.collegeLocation, `${label} college location`),
+    state: requiredText(participant.state, `${label} state`),
     stream: requiredText(participant.stream, `${label} stream`),
     year: requiredText(participant.year, `${label} year`),
   };
+}
+
+async function validateAvailability(supabase: ReturnType<typeof createClient>, payload: ValidationPayload) {
+  const teamName = normalizeOptionalText(payload.teamName);
+  const transactionId = normalizeOptionalText(payload.transactionId);
+  const emails = [
+    normalizeOptionalEmail(payload.leadEmail),
+    ...(payload.memberEmails || []).map((email) => normalizeOptionalEmail(email)),
+  ].filter(Boolean) as string[];
+
+  const [teamNameTaken, transactionIdTaken, takenEmails] = await Promise.all([
+    teamName ? existsByColumn(supabase, 'registrations', 'team_name_normalized', normalizeKey(teamName)) : Promise.resolve(false),
+    transactionId ? existsByColumn(supabase, 'registrations', 'transaction_id_normalized', normalizeKey(transactionId)) : Promise.resolve(false),
+    emails.length ? findExistingEmails(supabase, emails) : Promise.resolve([] as string[]),
+  ]);
+
+  return json({
+    teamNameTaken,
+    transactionIdTaken,
+    takenEmails,
+  });
+}
+
+async function existsByColumn(
+  supabase: ReturnType<typeof createClient>,
+  table: 'registrations',
+  column: 'team_name_normalized' | 'transaction_id_normalized',
+  value: string,
+) {
+  const { data, error } = await supabase
+    .from(table)
+    .select('id')
+    .eq(column, value)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return Boolean(data);
+}
+
+async function findExistingEmails(supabase: ReturnType<typeof createClient>, emails: string[]) {
+  const { data, error } = await supabase
+    .from('participants')
+    .select('email_normalized')
+    .in('email_normalized', emails);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((row) => row.email_normalized).filter(Boolean);
 }
 
 async function findDuplicate(supabase: ReturnType<typeof createClient>, clean: ReturnType<typeof validateAndNormalize>) {
@@ -340,6 +421,16 @@ function requiredText(value: unknown, label: string) {
     throw new Error(`${label} is required.`);
   }
   return value.trim();
+}
+
+function normalizeOptionalText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeOptionalEmail(value: unknown) {
+  if (typeof value !== 'string') return '';
+  const email = value.trim().toLowerCase();
+  return emailPattern.test(email) ? email : '';
 }
 
 function normalizeKey(value: string) {
