@@ -35,7 +35,9 @@ type ValidationPayload = {
   teamName?: string;
   transactionId?: string;
   leadEmail?: string;
+  leadWhatsapp?: string;
   memberEmails?: string[];
+  memberWhatsapps?: string[];
 };
 
 type RegistrationPayload = SubmissionPayload | ValidationPayload;
@@ -228,6 +230,11 @@ function validateAndNormalize(payload: SubmissionPayload) {
     throw new Error('Each participant must use a different email address.');
   }
 
+  const phones = [lead.whatsapp, ...members.map((member) => member.whatsapp)];
+  if (new Set(phones).size !== phones.length) {
+    throw new Error('Each participant must use a different WhatsApp number.');
+  }
+
   if (!payload.screenshot?.base64 || !payload.screenshot?.contentType) {
     throw new Error('Payment screenshot is required.');
   }
@@ -284,21 +291,28 @@ function normalizeParticipant(participant: ParticipantInput, label: string) {
 async function validateAvailability(supabase: ReturnType<typeof createClient>, payload: ValidationPayload) {
   const teamName = normalizeOptionalText(payload.teamName);
   const transactionId = normalizeOptionalText(payload.transactionId);
+  const leadWhatsapp = normalizeOptionalPhone(payload.leadWhatsapp);
   const emails = [
     normalizeOptionalEmail(payload.leadEmail),
     ...(payload.memberEmails || []).map((email) => normalizeOptionalEmail(email)),
   ].filter(Boolean) as string[];
+  const phones = [
+    leadWhatsapp,
+    ...(payload.memberWhatsapps || []).map((phone) => normalizeOptionalPhone(phone)),
+  ].filter(Boolean) as string[];
 
-  const [teamNameTaken, transactionIdTaken, takenEmails] = await Promise.all([
+  const [teamNameTaken, transactionIdTaken, takenEmails, takenPhones] = await Promise.all([
     teamName ? existsByColumn(supabase, 'registrations', 'team_name_normalized', normalizeKey(teamName)) : Promise.resolve(false),
     transactionId ? existsByColumn(supabase, 'registrations', 'transaction_id_normalized', normalizeKey(transactionId)) : Promise.resolve(false),
     emails.length ? findExistingEmails(supabase, emails) : Promise.resolve([] as string[]),
+    phones.length ? findExistingPhones(supabase, phones) : Promise.resolve([] as string[]),
   ]);
 
   return json({
     teamNameTaken,
     transactionIdTaken,
     takenEmails,
+    takenPhones,
   });
 }
 
@@ -334,6 +348,19 @@ async function findExistingEmails(supabase: ReturnType<typeof createClient>, ema
   return (data || []).map((row) => row.email_normalized).filter(Boolean);
 }
 
+async function findExistingPhones(supabase: ReturnType<typeof createClient>, phones: string[]) {
+  const { data, error } = await supabase
+    .from('participants')
+    .select('whatsapp')
+    .in('whatsapp', phones);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((row) => row.whatsapp).filter(Boolean);
+}
+
 async function findDuplicate(supabase: ReturnType<typeof createClient>, clean: ReturnType<typeof validateAndNormalize>) {
   const { data: existingTeam } = await supabase
     .from('registrations')
@@ -364,6 +391,17 @@ async function findDuplicate(supabase: ReturnType<typeof createClient>, clean: R
 
   if (existingEmails?.length) {
     return 'One of these email addresses is already registered.';
+  }
+
+  const phones = [clean.lead.whatsapp, ...clean.members.map((member) => member.whatsapp)];
+  const { data: existingPhones } = await supabase
+    .from('participants')
+    .select('whatsapp')
+    .in('whatsapp', phones)
+    .limit(1);
+
+  if (existingPhones?.length) {
+    return 'One of these WhatsApp numbers is already registered.';
   }
 
   return null;
@@ -454,6 +492,12 @@ function normalizeOptionalEmail(value: unknown) {
   return emailPattern.test(email) ? email : '';
 }
 
+function normalizeOptionalPhone(value: unknown) {
+  if (typeof value !== 'string') return '';
+  const digits = value.replace(/\D/g, '');
+  return /^\d{10}$/.test(digits) ? digits : '';
+}
+
 function normalizeKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -483,6 +527,9 @@ function messageForDatabaseError(message = '') {
   }
   if (message.includes('participants_email_unique')) {
     return 'One of these email addresses is already registered.';
+  }
+  if (message.includes('participants_whatsapp_unique')) {
+    return 'One of these WhatsApp numbers is already registered.';
   }
   return message || 'Registration failed. Please try again.';
 }

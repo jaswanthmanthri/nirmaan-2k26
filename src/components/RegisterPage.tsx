@@ -88,6 +88,7 @@ const emptyMember = (): MemberInfo => ({
 });
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
 
 type FieldStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error';
 
@@ -99,17 +100,24 @@ type FieldAvailability = {
 type AvailabilityState = {
   teamName: FieldAvailability;
   leadEmail: FieldAvailability;
+  leadPhone: FieldAvailability;
   transactionId: FieldAvailability;
   memberEmails: FieldAvailability[];
+  memberPhones: FieldAvailability[];
 };
 
 const emptyAvailability = (memberCount: number): AvailabilityState => ({
   teamName: { status: 'idle', message: 'Enter a team name to check availability.' },
   leadEmail: { status: 'idle', message: 'Enter a valid email to check availability.' },
+  leadPhone: { status: 'idle', message: 'Enter a valid phone number to check availability.' },
   transactionId: { status: 'idle', message: 'Enter a transaction ID to check availability.' },
   memberEmails: Array.from({ length: memberCount }, () => ({
     status: 'idle',
     message: 'Enter a valid email to check availability.',
+  })),
+  memberPhones: Array.from({ length: memberCount }, () => ({
+    status: 'idle',
+    message: 'Enter a valid phone number to check availability.',
   })),
 });
 
@@ -160,9 +168,11 @@ export default function RegisterPage() {
   useEffect(() => {
     const teamNameValue = teamName.trim();
     const leadEmailValue = normalizeEmail(lead.email);
+    const leadPhoneValue = normalizePhone(lead.whatsapp);
     const transactionValue = transactionId.trim();
     const memberEmails = members.map((member) => normalizeEmail(member.email));
-    const anyInput = teamNameValue || leadEmailValue || transactionValue || memberEmails.some(Boolean);
+    const memberPhones = members.map((member) => normalizePhone(member.whatsapp));
+    const anyInput = teamNameValue || leadEmailValue || leadPhoneValue || transactionValue || memberEmails.some(Boolean) || memberPhones.some(Boolean);
 
     if (!anyInput) {
       setAvailability(emptyAvailability(members.length));
@@ -176,8 +186,10 @@ export default function RegisterPage() {
       const checks = {
         teamName: teamNameValue.length >= 3,
         leadEmail: /^\S+@\S+\.\S+$/.test(leadEmailValue),
+        leadPhone: /^\d{10}$/.test(leadPhoneValue),
         transactionId: transactionValue.length >= 4,
         memberEmails: memberEmails.map((email) => /^\S+@\S+\.\S+$/.test(email)),
+        memberPhones: memberPhones.map((phone) => /^\d{10}$/.test(phone)),
       };
 
       if (checks.teamName) nextAvailability.teamName = { status: 'checking', message: 'Checking team name...' };
@@ -185,6 +197,9 @@ export default function RegisterPage() {
 
       if (checks.leadEmail) nextAvailability.leadEmail = { status: 'checking', message: 'Checking email...' };
       else if (lead.email.trim()) nextAvailability.leadEmail = { status: 'idle', message: 'Enter a valid email to check availability.' };
+
+      if (checks.leadPhone) nextAvailability.leadPhone = { status: 'checking', message: 'Checking phone number...' };
+      else if (lead.whatsapp.trim()) nextAvailability.leadPhone = { status: 'idle', message: 'Enter a valid phone number to check availability.' };
 
       if (checks.transactionId) nextAvailability.transactionId = { status: 'checking', message: 'Checking transaction ID...' };
       else if (transactionValue) nextAvailability.transactionId = { status: 'idle', message: 'Transaction ID must be at least 4 characters.' };
@@ -195,6 +210,12 @@ export default function RegisterPage() {
         return { status: 'checking', message: 'Checking email...' };
       });
 
+      nextAvailability.memberPhones = memberPhones.map((phone, idx) => {
+        if (!phone) return { status: 'idle', message: 'Enter a valid phone number to check availability.' };
+        if (!checks.memberPhones[idx]) return { status: 'idle', message: 'Enter a valid phone number to check availability.' };
+        return { status: 'checking', message: 'Checking phone number...' };
+      });
+
       setAvailability(nextAvailability);
 
       try {
@@ -202,6 +223,7 @@ export default function RegisterPage() {
           teamNameTaken?: boolean;
           transactionIdTaken?: boolean;
           takenEmails?: string[];
+          takenPhones?: string[];
           error?: string;
         }>('submit-registration', {
           body: {
@@ -209,7 +231,9 @@ export default function RegisterPage() {
             teamName: checks.teamName ? teamNameValue : undefined,
             transactionId: checks.transactionId ? transactionValue : undefined,
             leadEmail: checks.leadEmail ? leadEmailValue : undefined,
+            leadWhatsapp: checks.leadPhone ? leadPhoneValue : undefined,
             memberEmails: memberEmails.filter((email, idx) => checks.memberEmails[idx] && email),
+            memberWhatsapps: memberPhones.filter((phone, idx) => checks.memberPhones[idx] && phone),
           },
         });
 
@@ -224,6 +248,7 @@ export default function RegisterPage() {
         if (!data) return;
 
         const takenEmails = new Set((data.takenEmails || []).map(normalizeEmail));
+        const takenPhones = new Set((data.takenPhones || []).map(normalizePhone));
         setAvailability({
           teamName: checks.teamName
             ? {
@@ -237,6 +262,12 @@ export default function RegisterPage() {
                 message: takenEmails.has(leadEmailValue) ? 'Email already exists.' : 'Email is available.',
               }
             : nextAvailability.leadEmail,
+          leadPhone: checks.leadPhone
+            ? {
+                status: takenPhones.has(leadPhoneValue) ? 'taken' : 'available',
+                message: takenPhones.has(leadPhoneValue) ? 'Phone number already exists.' : 'Phone number is available.',
+              }
+            : nextAvailability.leadPhone,
           transactionId: checks.transactionId
             ? {
                 status: data.transactionIdTaken ? 'taken' : 'available',
@@ -252,22 +283,36 @@ export default function RegisterPage() {
               message: takenEmails.has(email) ? 'Email already exists.' : 'Email is available.',
             };
           }),
+          memberPhones: memberPhones.map((phone, idx) => {
+            if (!checks.memberPhones[idx] || !phone) {
+              return nextAvailability.memberPhones[idx] || { status: 'idle', message: 'Enter a valid phone number to check availability.' };
+            }
+            return {
+              status: takenPhones.has(phone) ? 'taken' : 'available',
+              message: takenPhones.has(phone) ? 'Phone number already exists.' : 'Phone number is available.',
+            };
+          }),
         });
       } catch {
         setAvailability((current) => ({
           teamName: checks.teamName ? { status: 'error', message: 'Could not check team name right now.' } : current.teamName,
           leadEmail: checks.leadEmail ? { status: 'error', message: 'Could not check email right now.' } : current.leadEmail,
+          leadPhone: checks.leadPhone ? { status: 'error', message: 'Could not check phone number right now.' } : current.leadPhone,
           transactionId: checks.transactionId ? { status: 'error', message: 'Could not check transaction ID right now.' } : current.transactionId,
           memberEmails: memberEmails.map((email, idx) => {
             if (!checks.memberEmails[idx] || !email) return current.memberEmails[idx] || { status: 'idle', message: 'Enter a valid email to check availability.' };
             return { status: 'error', message: 'Could not check email right now.' };
+          }),
+          memberPhones: memberPhones.map((phone, idx) => {
+            if (!checks.memberPhones[idx] || !phone) return current.memberPhones[idx] || { status: 'idle', message: 'Enter a valid phone number to check availability.' };
+            return { status: 'error', message: 'Could not check phone number right now.' };
           }),
         }));
       }
     }, 500);
 
     return () => window.clearTimeout(timer);
-  }, [teamName, lead.email, transactionId, members, selectedPlan]);
+  }, [teamName, lead.email, lead.whatsapp, transactionId, members, selectedPlan]);
 
   // ─── VALIDATION ─────────────────────────────────────────
   const validateStep1 = (): string[] => {
@@ -288,11 +333,13 @@ export default function RegisterPage() {
   const validateStep3 = (): string[] => {
     const errs: string[] = [];
     const emails = [normalizeEmail(lead.email)];
+    const phones = [normalizePhone(lead.whatsapp)];
     members.forEach((m, i) => {
       const num = i + 2;
       if (!m.fullName.trim()) errs.push(`Member ${num}: Full name is required`);
       if (!/^\S+@\S+\.\S+$/.test(m.email)) errs.push(`Member ${num}: Valid email is required`);
       emails.push(normalizeEmail(m.email));
+      phones.push(normalizePhone(m.whatsapp));
       if (!/^\d{10}$/.test(m.whatsapp.replace(/\D/g, ''))) errs.push(`Member ${num}: Valid 10-digit WhatsApp number required`);
       if (!m.gender) errs.push(`Member ${num}: Select gender`);
       if (!m.college.trim()) errs.push(`Member ${num}: College name is required`);
@@ -302,6 +349,7 @@ export default function RegisterPage() {
       if (!m.year) errs.push(`Member ${num}: Year is required`);
     });
     if (new Set(emails).size !== emails.length) errs.push('Each participant must use a different email address');
+    if (new Set(phones).size !== phones.length) errs.push('Each participant must use a different WhatsApp number');
     return errs;
   };
 
@@ -583,7 +631,15 @@ export default function RegisterPage() {
                     status={availability.leadEmail.status}
                     statusText={availability.leadEmail.message}
                   />
-                  <FormField label="WhatsApp No." type="tel" value={lead.whatsapp} onChange={v => setLead({ ...lead, whatsapp: v })} placeholder="ENTER WHATSAPP NUMBER" />
+                  <FormField
+                    label="WhatsApp No."
+                    type="tel"
+                    value={lead.whatsapp}
+                    onChange={v => setLead({ ...lead, whatsapp: v })}
+                    placeholder="ENTER WHATSAPP NUMBER"
+                    status={availability.leadPhone.status}
+                    statusText={availability.leadPhone.message}
+                  />
                   <FormSelect label="Gender" value={lead.gender} onChange={v => setLead({ ...lead, gender: v })} options={GENDER_OPTIONS} placeholder="Select gender" />
                   <FormField label="College Name" value={lead.college} onChange={v => setLead({ ...lead, college: v })} placeholder="ENTER COLLEGE NAME" />
                   <FormField label="College Location" value={lead.collegeLocation} onChange={v => setLead({ ...lead, collegeLocation: v })} placeholder="ENTER COLLEGE LOCATION" />
@@ -683,7 +739,15 @@ export default function RegisterPage() {
                         status={availability.memberEmails[idx]?.status}
                         statusText={availability.memberEmails[idx]?.message}
                       />
-                      <FormField label="WhatsApp No." type="tel" value={m.whatsapp} onChange={v => updateMember(idx, 'whatsapp', v)} placeholder="ENTER WHATSAPP NUMBER" />
+                      <FormField
+                        label="WhatsApp No."
+                        type="tel"
+                        value={m.whatsapp}
+                        onChange={v => updateMember(idx, 'whatsapp', v)}
+                        placeholder="ENTER WHATSAPP NUMBER"
+                        status={availability.memberPhones[idx]?.status}
+                        statusText={availability.memberPhones[idx]?.message}
+                      />
                       <FormSelect label="Gender" value={m.gender} onChange={v => updateMember(idx, 'gender', v)} options={GENDER_OPTIONS} placeholder="Select gender" />
                       <FormField label="College Name" value={m.college} onChange={v => updateMember(idx, 'college', v)} placeholder="ENTER COLLEGE NAME" />
                       <FormField label="College Location" value={m.collegeLocation} onChange={v => updateMember(idx, 'collegeLocation', v)} placeholder="ENTER COLLEGE LOCATION" />
