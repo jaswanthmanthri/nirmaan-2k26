@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Users, UserPlus, ClipboardCheck, CreditCard, CheckCircle2,
   ArrowRight, ArrowLeft, ChevronRight, Upload, X, Loader2,
-  Sparkles, Trophy, Zap
+  Sparkles, Trophy, Zap, FileText, AlertTriangle, ShieldAlert
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
@@ -130,6 +130,7 @@ const fileToBase64 = (file: File) =>
   });
 
 export default function RegisterPage() {
+  const [hasAgreedToGuidelines, setHasAgreedToGuidelines] = useState(false);
   const [step, setStep] = useState(1);
   const [teamName, setTeamName] = useState('');
   const [lead, setLead] = useState<MemberInfo>(emptyMember());
@@ -143,10 +144,6 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [availability, setAvailability] = useState<AvailabilityState>(() => emptyAvailability(1));
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const plan = TEAM_OPTIONS.find(o => o.key === selectedPlan)!;
-
-  // Scroll to top of form on step change
   useEffect(() => {
     containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [step]);
@@ -459,31 +456,72 @@ export default function RegisterPage() {
     });
   };
 
-  // ─── RENDER ─────────────────────────────────────────────
+  // ─── RENDER SUBMISSION SUCCESS ─────────────────────────
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6 pt-24 pb-16">
+      <div className="min-h-screen flex items-center justify-center px-4 pt-28 pb-16">
         <div
-          className="max-w-lg w-full p-10 rounded-3xl text-center"
+          className="max-w-xl w-full p-8 md:p-10 rounded-3xl text-center space-y-6"
           style={{
-            background: 'rgba(8,12,24,0.9)',
-            border: '1px solid rgba(16,185,129,0.3)',
-            backdropFilter: 'blur(20px)',
-            boxShadow: '0 0 50px rgba(16,185,129,0.1)',
+            background: 'rgba(8,12,24,0.92)',
+            border: '1px solid rgba(16,185,129,0.35)',
+            backdropFilter: 'blur(24px)',
+            boxShadow: '0 0 60px rgba(16,185,129,0.15)',
             animation: 'popCenterCard 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards',
           }}
         >
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center"
+          <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center"
             style={{ background: 'rgba(16,185,129,0.15)', border: '2px solid rgba(16,185,129,0.4)' }}>
             <CheckCircle2 className="w-10 h-10 text-emerald-400" />
           </div>
-          <h2 className="text-3xl font-black text-white mb-3">Registration Submitted!</h2>
-          <p className="text-slate-400 text-sm mb-2">
-            Your team <span className="text-orange-400 font-bold">{teamName}</span> has been registered for NIRMAAN 2K26.
-          </p>
-          <p className="text-slate-500 text-xs mb-8">
-            Transaction ID: <span className="text-blue-400 font-mono">{transactionId}</span>
-          </p>
+
+          <div>
+            <h2 className="text-3xl md:text-4xl font-black text-white mb-2">Registration Submitted!</h2>
+            <p className="text-slate-300 text-sm md:text-base">
+              Your team <span className="text-orange-400 font-bold">{teamName}</span> has been successfully registered for NIRMAAN 2K26.
+            </p>
+            <p className="text-slate-500 text-xs font-mono mt-1">
+              Transaction UTR / ID: <span className="text-blue-400 font-bold">{transactionId}</span>
+            </p>
+          </div>
+
+          {/* Catchy Quotation Banner */}
+          <div className="p-5 rounded-2xl text-center border relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(59,130,246,0.08) 100%)',
+              borderColor: 'rgba(249,115,22,0.3)',
+            }}
+          >
+            <p className="text-sm md:text-base italic font-semibold text-slate-200 leading-relaxed font-sans">
+              "Greatness begins with a single line of code. Get ready to transform your ideas into reality!"
+            </p>
+            <div className="text-[11px] font-mono font-bold text-orange-400 uppercase tracking-widest mt-2">
+              — See you at NIRMAAN 2K26 🚀
+            </div>
+          </div>
+
+          {/* Contact & NOC Reminder Notice Box */}
+          <div className="p-4 md:p-5 rounded-2xl text-left space-y-3"
+            style={{ background: 'rgba(15,23,42,0.85)', border: '1px solid rgba(249,115,22,0.25)' }}>
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-orange-400 uppercase tracking-wider">
+              <ShieldAlert className="w-4 h-4 text-orange-400 shrink-0" />
+              <span>Next Steps & Important Reminders</span>
+            </div>
+
+            <p className="text-xs text-slate-300 font-mono leading-relaxed">
+              📞 <strong className="text-white">We will be in contact with your team lead shortly</strong> via WhatsApp & Email with your official entry passes and event schedule.
+            </p>
+
+            <div className="pt-2 border-t border-slate-800">
+              <p className="text-xs text-amber-300/90 font-mono leading-relaxed flex items-start gap-2">
+                <span className="text-amber-400 text-base leading-none">⚠️</span>
+                <span>
+                  <strong className="text-white uppercase">NOC Requirement:</strong> Please ensure all team members carry their valid <strong className="text-white">College ID cards</strong> and a signed <strong className="text-white">No Objection Certificate (NOC)</strong> from your institution on event day.
+                </span>
+              </p>
+            </div>
+          </div>
+
           <Link
             to="/"
             className="inline-flex items-center gap-2 px-8 py-3.5 font-bold text-sm text-white transition-all hover:scale-105"
@@ -493,7 +531,7 @@ export default function RegisterPage() {
               boxShadow: '0 0 30px rgba(249,115,22,0.35)',
             }}
           >
-            Back to Home <ArrowRight className="w-4 h-4" />
+            Back to Home Page <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
@@ -502,12 +540,111 @@ export default function RegisterPage() {
 
   return (
     <div ref={containerRef} className="min-h-screen pt-24 pb-16 px-4 md:px-6 relative">
+      {/* ─── PRE-REGISTRATION GUIDELINES & NOC MODAL ─── */}
+      {!hasAgreedToGuidelines && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+          style={{ background: 'rgba(2,8,23,0.92)', backdropFilter: 'blur(20px)' }}>
+          <div
+            className="max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-6 md:p-8 flex flex-col justify-between"
+            style={{
+              background: 'linear-gradient(135deg, rgba(13,21,38,0.98) 0%, rgba(8,12,24,0.98) 100%)',
+              border: '1px solid rgba(249,115,22,0.4)',
+              boxShadow: '0 0 60px rgba(249,115,22,0.25)',
+              animation: 'popCenterCard 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards',
+            }}
+          >
+            <div>
+              {/* Modal Header */}
+              <div className="flex items-center gap-3 mb-4 pb-4 border-b border-orange-500/20">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.3)' }}>
+                  <FileText className="w-5 h-5 text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl md:text-2xl font-black text-white" style={{ fontFamily: "'Playfair Display', serif" }}>
+                    Registration Guidelines & Rules
+                  </h3>
+                  <p className="text-xs text-orange-400 font-mono font-semibold uppercase tracking-wider">
+                    NIRMAAN 2K26 — Essential Requirements
+                  </p>
+                </div>
+              </div>
+
+              {/* NOC Highlight Warning Box */}
+              <div className="mb-6 p-4 rounded-2xl flex items-start gap-3"
+                style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)' }}>
+                <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs font-mono text-slate-200 leading-relaxed">
+                  <strong className="text-amber-400 uppercase tracking-wider block mb-1">Mandatory NOC Certificate Notice:</strong>
+                  All participating team members must bring an official <strong className="text-white">No Objection Certificate (NOC)</strong> signed by their College Principal / HOD on the event day along with original <strong className="text-white">College ID Cards</strong>.
+                </div>
+              </div>
+
+              {/* Guidelines List */}
+              <div className="space-y-3 mb-6 text-xs md:text-sm font-mono text-slate-300">
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-orange-400 font-bold text-base leading-none">01</span>
+                  <div>
+                    <strong className="text-white">Team Composition:</strong> Teams can consist of 2, 3, or 4 members (Duo, Trio, or Squad). Multi-college teams are permitted.
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-orange-400 font-bold text-base leading-none">02</span>
+                  <div>
+                    <strong className="text-white">24-Hour Non-Stop Hackathon:</strong> Participants must remain present at ANITS campus for the entire 24-hour duration of the hackathon.
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-orange-400 font-bold text-base leading-none">03</span>
+                  <div>
+                    <strong className="text-white">Bring Your Own Equipment (BYOD):</strong> Teams must carry their own laptops, chargers, hardware components, and extension power boards.
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-orange-400 font-bold text-base leading-none">04</span>
+                  <div>
+                    <strong className="text-white">Included Perks:</strong> Meals, refreshments, high-speed WiFi, swag kit, late-night movie screening, and campfire activities are included.
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                  <span className="text-orange-400 font-bold text-base leading-none">05</span>
+                  <div>
+                    <strong className="text-white">Code of Conduct:</strong> Plagiarism or unethical behavior will result in immediate disqualification without refund.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-[11px] font-mono text-slate-400 text-center sm:text-left">
+                By clicking proceed, you confirm agreement to all rules.
+              </div>
+              <button
+                type="button"
+                onClick={() => setHasAgreedToGuidelines(true)}
+                className="w-full sm:w-auto px-8 py-3.5 font-bold text-xs md:text-sm text-white uppercase tracking-wider transition-all hover:scale-105 flex items-center justify-center gap-2"
+                style={{
+                  background: 'linear-gradient(135deg, #EA580C 0%, #F97316 50%, #FB923C 100%)',
+                  clipPath: 'polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%)',
+                  boxShadow: '0 0 25px rgba(249,115,22,0.4)',
+                }}
+              >
+                I Agree & Proceed to Register <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Background glow */}
       <div className="fixed inset-0 pointer-events-none" style={{
         background: 'radial-gradient(ellipse at 30% 30%, rgba(249,115,22,0.06) 0%, transparent 55%), radial-gradient(ellipse at 70% 70%, rgba(59,130,246,0.06) 0%, transparent 55%)',
       }} />
-
-      <div className="relative z-10 max-w-3xl mx-auto">
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5"
