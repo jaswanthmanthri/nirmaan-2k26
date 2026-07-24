@@ -647,6 +647,18 @@ export default function RegisterPage() {
       {/* Background glow */}
       <div className="fixed inset-0 pointer-events-none" style={{
         background: 'radial-gradient(ellipse at 30% 30%, rgba(249,115,22,0.06) 0%, transparent 55%), radial-gradient(ellipse at 70% 70%, rgba(59,130,246,0.06) 0%, transparent 55%)',
+      }} />
+
+      <div className="relative z-10 max-w-3xl mx-auto">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5"
+            style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.3)' }}>
+            <Sparkles className="w-4 h-4 text-orange-400" />
+            <span className="text-orange-400 text-xs font-mono tracking-[0.25em] uppercase">Team Registration</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-3"
+            style={{
+              background: 'linear-gradient(135deg, #FFFFFF 0%, #FB923C 50%, #FFFFFF 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
             }}>
             Register for NIRMAAN 2K26
