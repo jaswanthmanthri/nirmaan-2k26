@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import IntroScene from './components/IntroScene';
 import AnnouncementBar from './components/AnnouncementBar';
 import Navbar from './components/Navbar';
@@ -32,19 +32,14 @@ function HomePage() {
 
 export default function App() {
   const [introDone, setIntroDone] = useState(false);
-  const [isRegisterRoute, setIsRegisterRoute] = useState(false);
+  const location = useLocation();
+  const isWorkflowPage = ['/register', '/admin'].includes(location.pathname);
 
   useEffect(() => {
-    setIsRegisterRoute(['/register', '/admin'].includes(window.location.pathname));
-  }, []);
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
-  useEffect(() => {
-    if (introDone) {
-      window.scrollTo(0, 0);
-    }
-  }, [introDone]);
-
-  if (!introDone && !isRegisterRoute) {
+  if (!introDone && !isWorkflowPage) {
     return <IntroScene onComplete={() => setIntroDone(true)} />;
   }
 
